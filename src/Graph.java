@@ -85,7 +85,7 @@ public class Graph {
     }
 
     public void mergeVertices(Vertex source, Vertex twin) {
-//        any edge (black or red) between x and y gets deleted
+        // any edge (black or red) between x and y gets deleted
         removeEdge(source, twin);
         transferRedEdges(twin, source);
 
@@ -107,6 +107,25 @@ public class Graph {
         }
         removeVertex(twin);
         twinWidth = Math.max(twinWidth, getRedEdgesAmount());
+    }
+
+    public int getRedEdgesFromPotentialMerge(Vertex source, Vertex twin) {
+        Graph graph = new Graph();
+        for (Vertex vertex : vertices){
+            graph.addVertex(vertex);
+        }
+        for (Vertex vertex : edges.keySet()){
+            for (Vertex neighbor : edges.get(vertex)){
+                graph.addEdge(vertex, neighbor);
+            }
+        }
+        for (Vertex vertex : redEdges.keySet()){
+            for (Vertex neighbor : redEdges.get(vertex)){
+                graph.addRedEdge(vertex, neighbor);
+            }
+        }
+        graph.mergeVertices(source, twin);
+        return graph.getTwinWidth();
     }
 
     public int getRedEdgesAmount() {
@@ -152,6 +171,20 @@ public class Graph {
 
     public int getTwinWidth(){
         return twinWidth;
+    }
+
+    public int getLowerbound(){
+        int lowerbound = Integer.MAX_VALUE;
+        for (Vertex v : vertices){
+            for (Vertex u : vertices){
+                if (v.equals(u)) continue;
+                int redEdges = getRedEdgesFromPotentialMerge(v, u);
+                if (redEdges < lowerbound){
+                    lowerbound = redEdges;
+                }
+            }
+        }
+        return lowerbound;
     }
 
     @Override

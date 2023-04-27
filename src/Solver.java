@@ -98,12 +98,14 @@ public class Solver {
         }
 
         StringBuilder sb = new StringBuilder();
+        int lowerbound = graph.getLowerbound();
 
         for (String v : findRandomContractionSequence(graph)){
             sb.append(v);
             sb.append("\n");
         }
-        sb.append("c twin width: ").append(graph.getTwinWidth());
+        sb.append("c twin width: ").append(graph.getTwinWidth()).append("\n");
+        sb.append("c lower bound: ").append(lowerbound);
         String output = sb.toString();
         System.out.println(output);
     }
