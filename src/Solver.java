@@ -1,40 +1,13 @@
+import sun.misc.Signal;
+import sun.misc.SignalHandler;
+
 import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.Random;
-import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
 public class Solver {
-//    public static LinkedList<String> findContractionSequence(Graph graph){
-//        LinkedList<Edge> mergedEdges = new LinkedList<>();
-//        while (graph.getSize() != 0){
-////            Vertex source = graph.getVertices().iterator().next();
-//            Vertex source = getRandomSetElement(graph.getVertices());
-//            Vertex twin = null;
-//
-//            int maxNeighborDifference = -1;
-//            for (Vertex vertex : graph.getVertices()){
-//                if (source.equals(vertex)) continue;
-//                if (graph.getCommonNeighbors(source, vertex).size() > maxNeighborDifference) {
-//                    twin = vertex;
-//                    maxNeighborDifference = graph.getCommonNeighbors(source, vertex).size();
-//                }
-//            }
-//            int redEdges = (graph.getNeighbors(source).size() +  graph.getNeighbors(twin).size() - 2 * maxNeighborDifference - 2);
-//            twinWidth = Math.max(redEdges, twinWidth);
-//            graph.mergeVertices(source, twin);
-//            mergedEdges.add(new Edge(source, twin));
-//        }
-//        return convertEdgesToStrings(mergedEdges);
-//    }
-
-    static <E> E getRandomSetElement(Set<E> set) {
-        return set.stream().skip(new Random().nextInt(set.size())).findFirst().orElse(null);
-    }
-
     // find two most similar vertices
     public static LinkedList<String> findContractionSequence(Graph graph){
         LinkedList<Edge> mergedEdges = new LinkedList<>();
@@ -51,6 +24,21 @@ public class Solver {
                         minNeighborDifference = graph.getDifferentNeighbors(v, w).size();
                     }
                 }
+            }
+            graph.mergeVertices(source, twin);
+            mergedEdges.add(new Edge(source, twin));
+        }
+        return convertEdgesToStrings(mergedEdges);
+    }
+
+    // contract randomly
+    public static LinkedList<String> findRandomContractionSequence(Graph graph){
+        LinkedList<Edge> mergedEdges = new LinkedList<>();
+        while (graph.getSize() != 1){
+            Vertex source = graph.getRandomVertex();
+            Vertex twin = graph.getRandomVertex();
+            while (twin.equals(source)){
+                twin = graph.getRandomVertex();
             }
             graph.mergeVertices(source, twin);
 //            twinWidth = Math.max(graph.getCurrentTwinWidth(), twinWidth);
@@ -72,6 +60,20 @@ public class Solver {
         BufferedReader bi = new BufferedReader(new InputStreamReader(System.in));
 //        BufferedReader bi = new BufferedReader(new FileReader("tests/custom-graphs/small-grid.gr"));
 //        BufferedReader bi = new BufferedReader(new FileReader("tests/heuristic-public/heuristic_002.gr"));
+
+        final CountDownLatch exit_now = new CountDownLatch(1);
+
+        SignalHandler termHandler = new SignalHandler() {
+            @Override
+            public void handle(Signal sig)
+            {
+                System.out.println("Terminating");
+                exit_now.countDown();
+            }
+        };
+        Signal.handle(new Signal("TERM"), termHandler);
+
+
         Graph graph = new Graph();
 
         String line;
@@ -95,15 +97,13 @@ public class Solver {
             }
         }
 
-//        System.out.println("Graph:");
-//        System.out.println(graph);
-
         StringBuilder sb = new StringBuilder();
-        for (String v : findContractionSequence(graph)){
+
+        for (String v : findRandomContractionSequence(graph)){
             sb.append(v);
             sb.append("\n");
         }
-        sb.append("c twin width: ").append(graph.getTwinWidth()).append("\n");
+        sb.append("c twin width: ").append(graph.getTwinWidth());
         String output = sb.toString();
         System.out.println(output);
     }

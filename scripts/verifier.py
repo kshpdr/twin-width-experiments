@@ -126,6 +126,9 @@ def contract(g, e):
     tmps = []
     for zw in to_check:
         tmps.append(len(red_edges[zw]))
+    # print(e, max(tmps))
+    # print("black_edges: ", black_edges)
+    # print("red_edges: ", red_edges)
     return max(tmps)
 
     

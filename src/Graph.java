@@ -15,41 +15,37 @@ public class Graph {
     public void addVertex(Vertex v) {
         vertices.add(v);
         edges.put(v, new HashSet<>());
+        redEdges.put(v, new HashSet<>());
     }
 
     public void removeVertex(Vertex v) {
         vertices.remove(v);
-        edges.remove(v);
-        redEdges.remove(v);
+        edges.replace(v, new HashSet<>());
+        redEdges.replace(v, new HashSet<>());
 
-        Iterator<Vertex> vertexIterator = vertices.iterator();
-        while (vertexIterator.hasNext()) {
-            Vertex u = vertexIterator.next();
+        for (Vertex u : vertices) {
             edges.get(u).remove(v);
-//            if (edges.get(u).isEmpty()) {
-//                vertexIterator.remove();
-//                edges.remove(u);
-//            }
-            if (redEdges.containsKey(u)){
-                redEdges.get(u).remove(v);
-                if (redEdges.get(u).isEmpty()) {
-                    redEdges.remove(u);
-                }
-            }
+            redEdges.get(u).remove(v);
         }
     }
 
+    public Vertex getRandomVertex() {
+        if (vertices.isEmpty()) {
+            return null;
+        }
+
+        Random random = new Random();
+        int randomIndex = random.nextInt(vertices.size());
+        Vertex[] vertexArray = vertices.toArray(new Vertex[0]);
+        return vertexArray[randomIndex];
+    }
 
     public void addEdge(Vertex v, Vertex u) {
-        edges.putIfAbsent(v, new HashSet<>());
-        edges.putIfAbsent(u, new HashSet<>());
         edges.get(v).add(u);
         edges.get(u).add(v);
     }
 
     public void addRedEdge(Vertex v, Vertex u) {
-        redEdges.putIfAbsent(v, new HashSet<>());
-        redEdges.putIfAbsent(u, new HashSet<>());
         redEdges.get(v).add(u);
         redEdges.get(u).add(v);
     }
@@ -57,6 +53,8 @@ public class Graph {
     public void removeEdge(Vertex v, Vertex u) {
         edges.get(v).remove(u);
         edges.get(u).remove(v);
+        redEdges.get(v).remove(u);
+        redEdges.get(u).remove(v);
     }
 
     public Set<Vertex> getVertices() {
@@ -65,10 +63,6 @@ public class Graph {
 
     public Map<Vertex, Set<Vertex>> getEdges() {
         return edges;
-    }
-
-    public int getMaxRedEdgesCount(){
-        return 0;
     }
 
     public Set<Vertex> getNeighbors(Vertex v) {
@@ -93,6 +87,7 @@ public class Graph {
     public void mergeVertices(Vertex source, Vertex twin) {
 //        any edge (black or red) between x and y gets deleted
         removeEdge(source, twin);
+        transferRedEdges(twin, source);
 
         // x retains all black edges to its neighbors that are adjacent to y
         // all edges from x to vertices that are not adjacent to y become red
@@ -114,20 +109,45 @@ public class Graph {
         twinWidth = Math.max(twinWidth, getRedEdgesAmount());
     }
 
-    public boolean hasEdge(Vertex v, Vertex u) {
-        return edges.get(v).contains(u);
-    }
-
     public int getRedEdgesAmount() {
         int twinWidth = 0;
         for (Vertex v : redEdges.keySet()){
-            twinWidth += redEdges.get(v).size();
+            twinWidth = Math.max(twinWidth, redEdges.get(v).size());
         }
-        return twinWidth / 2;
+        return twinWidth;
+    }
+
+    public void transferRedEdges(Vertex from, Vertex to){
+        for (Vertex vertex : redEdges.get(from)){
+            redEdges.get(to).add(vertex);
+            redEdges.get(vertex).add(to);
+        }
+    }
+
+    public void printRedEdges(){
+        for (Vertex vertex : redEdges.keySet()){
+            System.out.print(vertex + ": ");
+            System.out.println(redEdges.get(vertex));
+        }
+    }
+    public void printEdges(){
+        for (Vertex vertex : edges.keySet()){
+            System.out.print(vertex + ": ");
+            System.out.println(edges.get(vertex));
+        }
     }
 
     public int getSize() {
         return vertices.size();
+    }
+
+    public Vertex getVertexFromId(int id){
+        for (Vertex vertex : vertices){
+            if (vertex.getId() == id){
+                return vertex;
+            }
+        }
+        return null;
     }
 
     public int getTwinWidth(){

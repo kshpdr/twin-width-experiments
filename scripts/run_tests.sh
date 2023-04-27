@@ -48,7 +48,7 @@ eval "$find_command" | sort | while read -r test_file; do
     if [ "$java_solution" == "$verifier_solution" ]; then
         solution="$java_solution"
     else
-        solution="FAILED: $verifier_solution != $java_solution"
+        solution="FAILED: Verifier: $verifier_solution != Java: $java_solution"
     fi
 
     # Save the result and log
