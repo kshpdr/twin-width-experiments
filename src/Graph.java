@@ -4,6 +4,7 @@ public class Graph {
     private Set<Vertex> vertices;
     private Map<Vertex, Set<Vertex>> edges;
     private Map<Vertex, Set<Vertex>> redEdges;
+    public PriorityQueue<Vertex> vertexScores = new PriorityQueue<>(Comparator.comparingInt(Vertex::getScore));
     private int twinWidth = 0;
 
     public Graph() {
@@ -27,6 +28,8 @@ public class Graph {
             edges.get(u).remove(v);
             redEdges.get(u).remove(v);
         }
+
+        vertexScores.remove(v);
     }
 
     public Vertex getRandomVertex() {
@@ -40,10 +43,13 @@ public class Graph {
         return vertexArray[randomIndex];
     }
 
+    public PriorityQueue<Vertex> getVertexScores() { return vertexScores; }
+
     public void addEdge(Vertex v, Vertex u) {
         edges.get(v).add(u);
         edges.get(u).add(v);
     }
+
 
     public void addRedEdge(Vertex v, Vertex u) {
         redEdges.get(v).add(u);
@@ -65,8 +71,36 @@ public class Graph {
         return edges;
     }
 
+
     public Set<Vertex> getNeighbors(Vertex v) {
         return edges.get(v);
+    }
+
+    public int[][] createScoreTable(){
+        int[][] scores = new int[getVertices().size()][getVertices().size()];
+        Arrays.stream(scores).forEach(row -> Arrays.fill(row, Integer.MIN_VALUE));
+        for (Vertex v1 : getVertices()){
+            for (Vertex v2 : getVertices()){
+                if (v1.equals(v2)) scores[v1.getId() - 1][v1.getId() - 1] = 0;
+                if (scores[v1.getId() - 1][v2.getId() - 1] != Integer.MIN_VALUE) continue;
+                scores[v1.getId() - 1][v2.getId() - 1] = getScore(v1, v2);
+                scores[v2.getId() - 1][v1.getId() - 1] = getScore(v1, v2);
+            }
+            v1.score = Arrays.stream(scores[v1.getId() - 1]).sum();
+            vertexScores.add(v1);
+        }
+        return scores;
+    }
+
+    public int getScore(Vertex v1, Vertex v2){
+        HashSet<Vertex> allNeighbors = new HashSet<>(getEdges().get(v1));
+        allNeighbors.addAll(getEdges().get(v2));
+        HashSet<Vertex> commonNeighbors = new HashSet<>(getEdges().get(v1));
+        commonNeighbors.retainAll(getEdges().get(v2));
+        allNeighbors.removeAll(commonNeighbors);
+        allNeighbors.remove(v1);
+        allNeighbors.remove(v2);
+        return allNeighbors.size();
     }
 
     public HashSet<Vertex> getCommonNeighbors(Vertex v1, Vertex v2){
@@ -82,6 +116,25 @@ public class Graph {
         allNeighbors.remove(v1);
         allNeighbors.remove(v2);
         return allNeighbors;
+    }
+
+    public Edge getBmsEdge(int k){
+        Vertex v = getRandomVertex();
+        Vertex u = getRandomVertex();
+        while (u.equals(v)) u = getRandomVertex();
+        int mergeScore = getScore(v, u);
+        for (int i = 0; i < k; i++) {
+            Vertex v1 = getRandomVertex();
+            Vertex u1 = getRandomVertex();
+            while (u1.equals(v1)) u1 = getRandomVertex();
+            int newScore = getScore(v1, u1);
+            if (newScore < mergeScore){
+                mergeScore = newScore;
+                v = v1;
+                u = u1;
+            }
+        }
+        return new Edge(v, u, mergeScore);
     }
 
     public void mergeVertices(Vertex source, Vertex twin) {

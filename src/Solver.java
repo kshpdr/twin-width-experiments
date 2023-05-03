@@ -2,10 +2,14 @@ import sun.misc.Signal;
 import sun.misc.SignalHandler;
 
 import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.IntStream;
 
 public class Solver {
     // find two most similar vertices
@@ -47,6 +51,64 @@ public class Solver {
         return convertEdgesToStrings(mergedEdges);
     }
 
+    public static LinkedList<String> findTableContractionSequence(Graph graph){
+        int[][] scores = graph.createScoreTable();
+        LinkedList<Edge> mergedEdges = new LinkedList<>();
+        HashSet<Integer> excludedVertices = new HashSet<>();
+        while (graph.getSize() != 1){
+            Vertex source = graph.getVertexScores().poll();
+            int[] neighborScores = scores[source.getId() - 1];
+            int bestNeighborIndex = IntStream.range(0, neighborScores.length)
+                    .filter(i -> !excludedVertices.contains(i + 1))
+                    .filter(i -> i != (source.getId() - 1))
+                    .reduce((i, j) -> neighborScores[i] < neighborScores[j] ? i : j)
+                    .getAsInt();
+            Vertex twin = graph.getVertexFromId(bestNeighborIndex + 1);
+            graph.mergeVertices(source, twin);
+            excludedVertices.add(twin.getId());
+            mergedEdges.add(new Edge(source, twin));
+            graph.vertexScores.add(source);
+        }
+        return convertEdgesToStrings(mergedEdges);
+    }
+
+    public static LinkedList<String> findTableContractionSequenceWithUpdate(Graph graph){
+        int[][] scores = graph.createScoreTable();
+        LinkedList<Edge> mergedEdges = new LinkedList<>();
+        HashSet<Integer> excludedVertices = new HashSet<>();
+
+        while (graph.getSize() != 1) {
+            int minVal = Integer.MAX_VALUE;
+            int minRow = 0;
+            int minCol = 0;
+            for (int row = 0; row < scores.length; row++) {
+                for (int col = 0; col < row; col++) {
+                    if (scores[row][col] < minVal) {
+                        minVal = scores[row][col];
+                        minRow = row;
+                        minCol = col;
+                    }
+                }
+            }
+            Vertex source = graph.getVertexFromId(minRow + 1);
+            Vertex twin = graph.getVertexFromId(minCol + 1);
+            graph.mergeVertices(source, twin);
+//            updateTable(scores, source, twin, graph);
+            mergedEdges.add(new Edge(source, twin));
+        }
+        return convertEdgesToStrings(mergedEdges);
+    }
+
+    public static LinkedList<String> findBmsContractionSequence(Graph graph){
+        LinkedList<Edge> mergedEdges = new LinkedList<>();
+        while (graph.getSize() != 1){
+            Edge edge = graph.getBmsEdge(50);
+            graph.mergeVertices(edge.getV1(), edge.getV2());
+            mergedEdges.add(edge);
+        }
+        return convertEdgesToStrings(mergedEdges);
+    }
+
     public static LinkedList<String> convertEdgesToStrings(LinkedList<Edge> edges) {
         LinkedList<String> result = new LinkedList<>();
         for (Edge e : edges) {
@@ -59,19 +121,20 @@ public class Solver {
     public static void main(String[] args) throws IOException {
         BufferedReader bi = new BufferedReader(new InputStreamReader(System.in));
 //        BufferedReader bi = new BufferedReader(new FileReader("tests/custom-graphs/small-grid.gr"));
-//        BufferedReader bi = new BufferedReader(new FileReader("tests/heuristic-public/heuristic_002.gr"));
+//        BufferedReader bi = new BufferedReader(new FileReader("tests/heuristic-public/heuristic_200.gr"));
 
-        final CountDownLatch exit_now = new CountDownLatch(1);
-
-        SignalHandler termHandler = new SignalHandler() {
-            @Override
-            public void handle(Signal sig)
-            {
-                System.out.println("Terminating");
-                exit_now.countDown();
-            }
-        };
-        Signal.handle(new Signal("TERM"), termHandler);
+        // might break optio output
+//        final CountDownLatch exit_now = new CountDownLatch(1);
+//
+//        SignalHandler termHandler = new SignalHandler() {
+//            @Override
+//            public void handle(Signal sig)
+//            {
+//                System.out.println("Terminating");
+//                exit_now.countDown();
+//            }
+//        };
+//        Signal.handle(new Signal("TERM"), termHandler);
 
 
         Graph graph = new Graph();
@@ -98,14 +161,12 @@ public class Solver {
         }
 
         StringBuilder sb = new StringBuilder();
-        int lowerbound = graph.getLowerbound();
 
-        for (String v : findRandomContractionSequence(graph)){
+        for (String v : findBmsContractionSequence(graph)){
             sb.append(v);
             sb.append("\n");
         }
         sb.append("c twin width: ").append(graph.getTwinWidth()).append("\n");
-        sb.append("c lower bound: ").append(lowerbound);
         String output = sb.toString();
         System.out.println(output);
     }

@@ -1,18 +1,33 @@
 #!/bin/bash
 
+elapsed_time_counter() {
+    local start=$SECONDS
+    local elapsed_seconds
+    while true; do
+        elapsed_seconds=$(( SECONDS - start ))
+        printf "\r%-30s %2ds" "Elapsed time:" "$elapsed_seconds"
+        sleep 1
+    done
+}
+
 # Change directory to the script's location
 cd ..
 
 # Get the optional name parameter and current date/time
 test_run_name="${1:-}"
 subfolder="${2:-}"
-current_datetime=$(date "+%Y-%m-%d-%H-%M-%S")
+current_date=$(date "+%Y-%m-%d")
+current_time=$(date "+%H-%M-%S")
+
+# Create the output directories if they don't exist
+mkdir -p "scripts/out/$current_date/results"
+mkdir -p "scripts/out/$current_date/logs"
 
 # Create the results and logs files
-results_file="results-${test_run_name}-${current_datetime}.csv"
-logs_file="logs-${test_run_name}-${current_datetime}.csv"
-echo "Test,Time,Vertices,Edges,Solution" > scripts/out/$results_file
-echo "Test,Output" > scripts/out/$logs_file
+results_file="results-${test_run_name}-${current_time}.csv"
+logs_file="logs-${test_run_name}-${current_time}.csv"
+echo "Test,Time,Vertices,Edges,Solution" > "scripts/out/$current_date/results/$results_file"
+echo "Test,Output" > "scripts/out/$current_date/logs/$logs_file"
 
 # Prepare the find command based on the presence of a subfolder argument
 if [ -z "$subfolder" ]; then
@@ -33,27 +48,31 @@ eval "$find_command" | sort | while read -r test_file; do
     vertices=$(echo "$vertices_edges" | cut -d ' ' -f 1)
     edges=$(echo "$vertices_edges" | cut -d ' ' -f 2)
 
+    elapsed_time_counter & elapsed_time_pid=$!
+    (gtime --format="%e" --quiet -o temp_time.txt java -cp out/production/twin-width-solver Solver < "$test_file" 2>&1 > temp_java_output.txt)
+    kill $elapsed_time_pid 2>/dev/null
+    disown $elapsed_time_pid
+    printf "\r"
 
-    # Run the Java solver with the test input and measure the time using gtime
-    gtime_output=$(gtime --format="%e" --quiet -o temp_time.txt java -cp out/production/twin-width-solver Solver < "$test_file" 2>&1 > temp_java_output.txt)
     java_output=$(cat temp_java_output.txt)
     elapsed_time=$(cat temp_time.txt)
 
     # Extract the solution from the Java output
     java_solution=$(echo "$java_output" | perl -nle 'print $1 if /c twin width: (\d+)/')
 
-    verifier_output=$(python3 scripts/verifier.py "$test_file" <(printf "%s" "$java_output"))
+    verifier_output=$(python3 scripts/verifier.py "$test_file" <(printf "%s" "$java_output") 2>&1)
     verifier_solution=$(echo "$verifier_output" | perl -nle 'print $1 if /Width: (\d+)/')
 
     if [ "$java_solution" == "$verifier_solution" ]; then
         solution="$java_solution"
     else
-        solution="FAILED: Verifier: $verifier_solution != Java: $java_solution"
+        verifier_error=$(echo "$verifier_output" | grep -v 'Width:' | head -n 1)
+        solution="FAILED: Verifier: $verifier_solution != Java: $java_solution, Error: $verifier_error"
     fi
 
     # Save the result and log
-    echo "$test_name,$elapsed_time,$vertices,$edges,$solution" >> scripts/out/$results_file
-    echo "$test_name,\"$java_output\"" >> scripts/out/$logs_file
+    echo "$test_name,$elapsed_time,$vertices,$edges,$solution" >> "scripts/out/$current_date/results/$results_file"
+    echo "$test_name,\"$java_output\"" >> "scripts/out/$current_date/logs/$logs_file"
 
     # Print the elapsed time
     printf "%-30s %-10s %-10s %-10s %-10s\n" "$test_name" "${elapsed_time}s" "$vertices" "$edges" "$solution"
