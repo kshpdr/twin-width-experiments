@@ -19,13 +19,16 @@ subfolder="${2:-}"
 current_date=$(date "+%Y-%m-%d")
 current_time=$(date "+%H-%M-%S")
 
+# Extract the function name from the Solver.java file
+function_name=$(awk -F'for \\(String v : ' '{print $2}' src/Solver.java | awk -F'\\(' '{print $1}')
+
 # Create the output directories if they don't exist
 mkdir -p "scripts/out/$current_date/results"
 mkdir -p "scripts/out/$current_date/logs"
 
 # Create the results and logs files
-results_file="results-${test_run_name}-${current_time}.csv"
-logs_file="logs-${test_run_name}-${current_time}.csv"
+results_file="${current_time}-results-${function_name}.csv"
+logs_file="${current_time}-logs-${function_name}.csv"
 echo "Test,Time,Vertices,Edges,Solution" > "scripts/out/$current_date/results/$results_file"
 echo "Test,Output" > "scripts/out/$current_date/logs/$logs_file"
 
