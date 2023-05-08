@@ -9,6 +9,7 @@ class Graph:
 
         self.graph = gt.Graph(directed=False)
         self.graph.properties[("v", "id")] = self.graph.new_vertex_property('int', val=False)
+        self.graph.properties[("v", "red_edges")] = self.graph.new_vertex_property('int', val=False)
         self.graph.properties[("e", "red_edges")] = self.graph.new_edge_property('bool', val=False)
         self.twin_width = 0
 
@@ -27,6 +28,9 @@ class Graph:
     def get_red_edges(self):
         return self.graph.properties[("e", "red_edges")]
 
+    def get_red_edges_pro_vertex(self):
+        return self.graph.properties[("v", "red_edges")]
+
     def get_vertices_id(self):
         return self.graph.properties[("v", "id")]
 
@@ -39,18 +43,26 @@ class Graph:
         self.graph.add_edge(v, u)
 
     def mark_edge_red(self, v, u):
-        self.get_red_edges()[self.get_edge(v, u)] = True
+        if self.get_red_edges()[self.get_edge(v, u)] == False:
+            self.get_red_edges()[self.get_edge(v, u)] = True
+            self.get_red_edges_pro_vertex()[v] += 1
+            self.get_red_edges_pro_vertex()[u] += 1
 
     def mark_vertex_neighbors_red(self, source, neighbors):
         for neighbor in neighbors:
             self.mark_edge_red(source, neighbor)
 
+    # Rewrite so that red_edges for each v updated
     def remove_vertex(self, v):
         self.graph.remove_vertex(v)
 
     def remove_edge(self, v, u):
-        if self.graph.edge(v, u):
-            self.graph.remove_edge(self.get_edge(v, u))
+        edge = self.graph.edge(v, u)
+        if edge:
+            self.graph.remove_edge(edge)
+            if self.get_red_edges()[edge] == 1:
+                self.get_red_edges_pro_vertex()[v] -= 1
+                self.get_red_edges_pro_vertex()[u] -= 1
 
     def get_vertex_id(self, v):
         return self.graph.properties[("v", "id")][v]
@@ -66,22 +78,37 @@ class Graph:
         all_neighbors = set(self.get_neighbors(v)).union(self.get_neighbors(u)).difference((v, u))
         return len(all_neighbors) - len(common_neighbors)
 
-    def get_red_edges_amount(self):
-        red_edge_count = {}
-        for v in self.get_vertices():
-            red_edge_count[v] = 0
-            for e in v.out_edges():
-                if self.get_red_edges()[e]:
-                    red_edge_count[v] += 1
+    # def get_red_edges_amount(self):
+    #     red_edge_count = {}
+    #     for v in self.get_vertices():
+    #         red_edge_count[v] = 0
+    #         for e in v.out_edges():
+    #             if self.get_red_edges()[e]:
+    #                 red_edge_count[v] += 1
+    #
+    #     return max(red_edge_count.values())
 
-        return max(red_edge_count.values())
+    def get_red_edges_amount(self):
+        return self.get_red_edges_pro_vertex().a.max()
+
+    def transfer_edges(self, src, dest, common_neighbors):
+        for v in common_neighbors:
+            e = input_graph.get_edge(src, v)
+            if self.get_red_edges()[e] == 1 and self.get_red_edges()[input_graph.get_edge(dest, v)] == 0:
+                self.mark_edge_red(dest, v)
 
     def merge_vertices(self, source, twin):
+        print([f"{input_graph.get_vertex_id(e.source())} {input_graph.get_vertex_id(e.target())}: {input_graph.get_red_edges()[e]}" for e in input_graph.get_edges()])
+        print([f"{input_graph.get_vertex_id(v)}: {input_graph.get_red_edges_pro_vertex()[v]}" for v in self.get_vertices()])
         source_neighbors = self.get_neighbors(source)
         twin_neighbors = self.get_neighbors(twin)
 
         # any edge (black or red) between x and y gets deleted
         self.remove_edge(source, twin)
+
+        common_neighbors = set(source_neighbors).intersection(set(twin_neighbors))
+        self.transfer_edges(twin, source, common_neighbors)
+
         #  x retains all black edges to its neighbors that are adjacent to y
         #  all edges from x to vertices that are not adjacent to y become red
         source_unique_neighbors = set(source_neighbors) - set(twin_neighbors).union({twin})
@@ -95,6 +122,8 @@ class Graph:
 
         # remove merged vertex
         self.remove_vertex(twin)
+        print([f"{input_graph.get_vertex_id(e.source())} {input_graph.get_vertex_id(e.target())}: {input_graph.get_red_edges()[e]}" for e in input_graph.get_edges()])
+        print([f"{input_graph.get_vertex_id(v)}: {input_graph.get_red_edges_pro_vertex()[v]}" for v in self.get_vertices()])
         self.twin_width = max(self.twin_width, self.get_red_edges_amount())
 
 
@@ -109,9 +138,10 @@ def find_random_contraction_sequence(input_graph):
 
         v, u = input_graph.get_vertex(v_id), input_graph.get_vertex(u_id)
         current_sequence += f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n"
+        print(f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n")
         input_graph.merge_vertices(v, u)
 
-    current_sequence += f"c twin width {input_graph.get_twin_width()}"
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
 
     return current_sequence
 
