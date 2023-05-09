@@ -19,7 +19,7 @@ current_date=$(date "+%Y-%m-%d")
 current_time=$(date "+%H-%M-%S")
 
 # Extract the function name from the twinwidth.py file
-function_name="twinwidth"
+function_name=$(grep -E '^\s*best_sequence\s*=' twinwidth.py | awk -F'=' '{print $2}' | awk '{print $1}')
 
 # Create the output directories if they don't exist
 mkdir -p "scripts/out/$current_date/results"
