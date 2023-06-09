@@ -4,6 +4,7 @@ import graph_tool.topology
 import numpy as np
 from graph import Graph
 import heapq
+from collections import defaultdict
 
 
 def find_random_contraction_sequence(input_graph):
@@ -194,4 +195,45 @@ def find_from_cliques_contraction_sequence(input_graph):
             clique = np.delete(clique, 1)
 
     current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+    return current_sequence
+
+
+def find_degree_contraction(input_graph: Graph):
+    current_sequence = ""
+
+    degree_to_vertices = defaultdict(list)
+    for v in input_graph.get_vertices():
+        degree_to_vertices[v.out_degree()].append(input_graph.get_vertex_id(v))
+
+    while input_graph.graph.num_vertices() > 1:
+        vertices_by_degree = sorted(degree_to_vertices.keys())
+        candidates = []
+        for degree in vertices_by_degree:
+            while degree_to_vertices[degree] and len(candidates) < 20:
+                candidates.append(degree_to_vertices[degree].pop())
+
+        merge_scores = []
+
+        for v in candidates:
+            for u in candidates:
+                if v != u:
+                    merge_score = input_graph.get_score(input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u))
+                    merge_scores.append(((v, u), merge_score))
+
+        best_pair = min(merge_scores, key=lambda x: x[1])[0] if merge_scores else None
+
+        v, u = best_pair
+        current_sequence += f"{v} {u} \n"
+        # print(f"Found ({input_graph.get_twin_width()}): {v} {u}")
+
+        v, u = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
+
+        input_graph.merge_vertices(v, u)
+
+        degree_to_vertices = defaultdict(list)
+        for v in input_graph.get_vertices():
+            degree_to_vertices[v.out_degree()].append(input_graph.get_vertex_id(v))
+
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+
     return current_sequence
