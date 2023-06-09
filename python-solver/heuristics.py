@@ -3,6 +3,8 @@ import random
 import graph_tool.topology
 import numpy as np
 from graph import Graph
+import heapq
+
 
 def find_random_contraction_sequence(input_graph):
     current_sequence = ""
@@ -80,6 +82,46 @@ def find_table_set_contraction_sequence(input_graph):
         (v, u) = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
 
         to_update_neighbors = set(input_graph.get_neighbors(v)).union(set(input_graph.get_neighbors(u))).union({int(v)})
+        if u in to_update_neighbors: to_update_neighbors.remove(u)
+
+        to_update_neighbors = [input_graph.get_vertex_id(v) for v in to_update_neighbors]
+
+        current_sequence += f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n"
+        # print(f"Found ({input_graph.get_merge_cost(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))}): ", input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))
+        input_graph.merge_vertices(v, u)
+        input_graph.update_merge_scores(to_update_neighbors)
+
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+
+    return current_sequence
+
+
+def find_most_optimal_updated_contraction_sequence(input_graph):
+    current_sequence = ""
+
+    for v in input_graph.get_vertices():
+        for u in input_graph.get_vertices():
+            # print(f"{int(v)}: {int(u)}")
+            if v == u: continue
+
+            temp_graph = input_graph.graph.copy()
+
+            # Merging vertices in the temporary graph
+            temp_input_graph = Graph()
+            temp_input_graph.graph = temp_graph
+            temp_input_graph.merge_vertices(v, u)
+
+            input_graph.set_merge_cost(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u), max(temp_graph.vp["red_edges"].a))
+            input_graph.set_merge_cost(input_graph.get_vertex_id(u), input_graph.get_vertex_id(v), max(temp_graph.vp["red_edges"].a))
+
+    # print("Scores computed")
+    while input_graph.graph.num_vertices() > 1:
+        (v, u) = min(input_graph.merge_costs, key=input_graph.merge_costs.get)
+        (v, u) = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
+
+        top_20_pairs = heapq.nsmallest(20, input_graph.merge_costs, key=input_graph.merge_costs.get)
+        to_update_neighbors = set(input_graph.get_vertex_by_id(vertex) for pair in top_20_pairs for vertex in pair)
+        # to_update_neighbors = set(input_graph.get_neighbors(v)).union(set(input_graph.get_neighbors(u))).union({int(v)})
         if u in to_update_neighbors: to_update_neighbors.remove(u)
 
         to_update_neighbors = [input_graph.get_vertex_id(v) for v in to_update_neighbors]
