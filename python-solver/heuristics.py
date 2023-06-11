@@ -199,6 +199,13 @@ def find_from_cliques_contraction_sequence(input_graph):
 
 
 def find_degree_contraction(input_graph: Graph):
+    """
+    Takes first 10 vertices with the lowest degree,
+    computes new red edges attached to those vertices,
+    finds the best pair between them and merges it,
+    update vertices' degrees
+    Complexity O(n^3)
+    """
     current_sequence = ""
 
     degree_to_vertices = defaultdict(list)
@@ -240,6 +247,13 @@ def find_degree_contraction(input_graph: Graph):
 
 
 def find_degree_merge_simulation_contraction(input_graph: Graph):
+    """
+    Takes first 10 vertices with the lowest degree,
+    simulates the merge and computes twin-width,
+    finds the best pair between them and merges it,
+    update vertices' degrees
+    Complexity O(n^4) (probably because of the copying the graph)
+    """
     current_sequence = ""
 
     degree_to_vertices = defaultdict(list)
@@ -286,6 +300,12 @@ def find_degree_merge_simulation_contraction(input_graph: Graph):
 
 
 def find_table_set_merge_score_contraction_sequence(input_graph: Graph):
+    """
+    Computes for all vertices nScore (neighborhood score),
+    takes the best pair of them,
+    updates only its neighbors' scores
+    Complexity worst case O(n^3), best case O(n^2)
+    """
     current_sequence = ""
 
     for v in input_graph.get_vertices():
