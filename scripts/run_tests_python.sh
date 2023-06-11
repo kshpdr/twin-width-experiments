@@ -19,15 +19,15 @@ current_date=$(date "+%Y-%m-%d")
 current_time=$(date "+%H-%M-%S")
 
 # Extract the function name from the twinwidth.py file
-function_name=$(grep -E '^\s*best_sequence\s*=' twinwidth.py | awk -F'=' '{print $2}' | awk '{print $1}')
+function_name=$(grep -o 'find_[^()]*' python-solver/main.py | head -n 1 | sed 's/(.*//')
 
 # Create the output directories if they don't exist
 mkdir -p "scripts/out/$current_date/results"
 mkdir -p "scripts/out/$current_date/logs"
 
 # Create the results and logs files
-results_file="${current_time}-results-python-${function_name}.csv"
-logs_file="${current_time}-logs-python-${function_name}.csv"
+results_file="${current_time}-results-python-${subfolder}-${function_name}.csv"
+logs_file="${current_time}-logs-python-${subfolder}-${function_name}.csv"
 echo "Test,Time,Vertices,Edges,Solution" > "scripts/out/$current_date/results/$results_file"
 echo "Test,Output" > "scripts/out/$current_date/logs/$logs_file"
 
@@ -51,7 +51,7 @@ eval "$find_command" | sort | while read -r test_file; do
     edges=$(echo "$vertices_edges" | cut -d ' ' -f 2)
 
     elapsed_time_counter & elapsed_time_pid=$!
-    (gtime --format="%e" --quiet -o temp_time.txt python3 twinwidth.py < "$test_file" 2>/dev/null > temp_python_output.txt)
+    (gtime --format="%e" --quiet -o temp_time.txt python3 python-solver/main.py < "$test_file" 2>/dev/null > temp_python_output.txt)
     kill $elapsed_time_pid 2>/dev/null
     disown $elapsed_time_pid
     printf "\r"

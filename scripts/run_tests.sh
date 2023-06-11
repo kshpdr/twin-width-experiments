@@ -14,21 +14,20 @@ elapsed_time_counter() {
 cd ..
 
 # Get the optional name parameter and current date/time
-test_run_name="${1:-}"
-subfolder="${2:-}"
+subfolder="${1:-}"
 current_date=$(date "+%Y-%m-%d")
 current_time=$(date "+%H-%M-%S")
 
 # Extract the function name from the Solver.java file
-function_name=$(awk -F'for \\(String v : ' '{print $2}' src/Solver.java | awk -F'\\(' '{print $1}')
+function_name=$(sed -n 's/.*for (String v : \([^ (]*\).*/\1/p' src/Solver.java)
 
 # Create the output directories if they don't exist
 mkdir -p "scripts/out/$current_date/results"
 mkdir -p "scripts/out/$current_date/logs"
 
 # Create the results and logs files
-results_file="${current_time}-results-${function_name}.csv"
-logs_file="${current_time}-logs-${function_name}.csv"
+results_file="${current_time}-results-java-${function_name}.csv"
+logs_file="${current_time}-logs-java-${function_name}.csv"
 echo "Test,Time,Vertices,Edges,Solution" > "scripts/out/$current_date/results/$results_file"
 echo "Test,Output" > "scripts/out/$current_date/logs/$logs_file"
 

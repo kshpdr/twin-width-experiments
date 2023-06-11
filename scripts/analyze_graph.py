@@ -52,11 +52,13 @@ if __name__ == "__main__":
     vertices, edges, adj_list = read_graph(graph_file)
     graph_tool_graph = build_graph_tool_graph(vertices, edges, adj_list)
     is_planar = topology.is_planar(graph_tool_graph)
+    is_bipartite = topology.is_bipartite(graph_tool_graph)
 
     density = graph_density(vertices, edges)
     distribution = degree_distribution(adj_list)
 
     print(f"Graph Planarity: {is_planar}")
+    print(f"Graph Bipartite: {is_bipartite}")
     print(f"Graph Density: {density}")
     print("Degree Distribution:")
     for degree, count in sorted(distribution.items()):
