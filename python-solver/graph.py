@@ -33,6 +33,17 @@ class Graph:
                 self.set_merge_cost(self.get_vertex_id(neighbor), self.get_vertex_id(v),
                                     max(temp_graph.vp["red_edges"].a))
 
+    def update_merge_only_neighbors_scores(self, vertices):
+        for v in vertices:
+            v = self.get_vertex_by_id(v)
+            for neighbor in self.get_vertices():
+                if v == neighbor: continue
+                self.set_merge_cost(self.get_vertex_id(v), self.get_vertex_id(neighbor),
+                                    self.get_score(v, neighbor))
+                self.set_merge_cost(self.get_vertex_id(neighbor), self.get_vertex_id(v),
+                                    self.get_score(v, neighbor))
+
+
     def print_edges(self):
         print([f"{e.source()} {e.target()}" for e in self.get_edges()])
 

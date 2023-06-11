@@ -224,7 +224,7 @@ def find_degree_contraction(input_graph: Graph):
 
         v, u = best_pair
         current_sequence += f"{v} {u} \n"
-        # print(f"Found ({input_graph.get_twin_width()}): {v} {u}")
+        print(f"c Found ({input_graph.get_twin_width()}): {v} {u}")
 
         v, u = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
 
@@ -233,6 +233,80 @@ def find_degree_contraction(input_graph: Graph):
         degree_to_vertices = defaultdict(list)
         for v in input_graph.get_vertices():
             degree_to_vertices[v.out_degree()].append(input_graph.get_vertex_id(v))
+
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+
+    return current_sequence
+
+
+def find_degree_merge_simulation_contraction(input_graph: Graph):
+    current_sequence = ""
+
+    degree_to_vertices = defaultdict(list)
+    for v in input_graph.get_vertices():
+        degree_to_vertices[v.out_degree()].append(input_graph.get_vertex_id(v))
+
+    while input_graph.graph.num_vertices() > 1:
+        vertices_by_degree = sorted(degree_to_vertices.keys())
+        candidates = []
+        for degree in vertices_by_degree:
+            while degree_to_vertices[degree] and len(candidates) < 20:
+                candidates.append(degree_to_vertices[degree].pop())
+
+        merge_scores = []
+
+        for v in candidates:
+            for u in candidates:
+                if v != u:
+                    temp_graph = input_graph.graph.copy()
+
+                    temp_input_graph = Graph()
+                    temp_input_graph.graph = temp_graph
+                    temp_input_graph.merge_vertices(input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u))
+
+                    merge_scores.append(((v, u), max(temp_graph.vp["red_edges"].a)))
+
+        best_pair = min(merge_scores, key=lambda x: x[1])[0] if merge_scores else None
+
+        v, u = best_pair
+        current_sequence += f"{v} {u} \n"
+        print(f"c Found ({input_graph.get_twin_width()}): {v} {u}")
+
+        v, u = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
+
+        input_graph.merge_vertices(v, u)
+
+        degree_to_vertices = defaultdict(list)
+        for v in input_graph.get_vertices():
+            degree_to_vertices[v.out_degree()].append(input_graph.get_vertex_id(v))
+
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+
+    return current_sequence
+
+
+def find_table_set_merge_score_contraction_sequence(input_graph: Graph):
+    current_sequence = ""
+
+    for v in input_graph.get_vertices():
+        for u in input_graph.get_vertices():
+            if v == u: continue
+            input_graph.set_merge_cost(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u), input_graph.get_score(v, u))
+            input_graph.set_merge_cost(input_graph.get_vertex_id(u), input_graph.get_vertex_id(v), input_graph.get_score(v, u))
+
+    while input_graph.graph.num_vertices() > 1:
+        (v, u) = min(input_graph.merge_costs, key=input_graph.merge_costs.get)
+        (v, u) = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
+
+        to_update_neighbors = set(input_graph.get_neighbors(v)).union(set(input_graph.get_neighbors(u))).union({int(v)})
+        if u in to_update_neighbors: to_update_neighbors.remove(u)
+
+        to_update_neighbors = [input_graph.get_vertex_id(v) for v in to_update_neighbors]
+
+        current_sequence += f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n"
+        # print(f"Found ({input_graph.get_merge_cost(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))}): ", input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))
+        input_graph.merge_vertices(v, u)
+        input_graph.update_merge_only_neighbors_scores(to_update_neighbors)
 
     current_sequence += f"c twin width: {input_graph.get_twin_width()}"
 

@@ -1,3 +1,5 @@
+from graph_tool import GraphView
+
 def simulate(input_graph):
     current_sequence = ""
     pairs = """2 3
@@ -21,3 +23,13 @@ def simulate(input_graph):
     current_sequence += f"c twin width: {input_graph.get_twin_width()}"
 
     return current_sequence
+
+
+def get_graph_view(input_graph, v, u):
+    def filter_vertex(vertex):
+        return vertex != u
+
+    simulated_graph = GraphView(input_graph.graph, vfilt=filter_vertex)    # Now you can perform operations on the simulated_graph as if 'u' was not present
+
+    # Return the simulated graph
+    return simulated_graph
