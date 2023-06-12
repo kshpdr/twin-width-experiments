@@ -204,7 +204,7 @@ def find_degree_contraction(input_graph: Graph):
     computes new red edges attached to those vertices,
     finds the best pair between them and merges it,
     update vertices' degrees
-    Complexity O(n^3)
+    Complexity O(n^2)
     """
     current_sequence = ""
 
