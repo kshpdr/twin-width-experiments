@@ -1,6 +1,10 @@
 import sys
 import graph_tool as gt
 import graph_tool.topology as topology
+import matplotlib.pyplot as plt
+import graph_tool.stats as gt_stats
+import os
+import numpy as np
 
 
 def read_graph(file_path):
@@ -42,6 +46,29 @@ def degree_distribution(adj_list):
     return degree_count
 
 
+def degree_histogram(graph, graph_file):
+    # Create the histogram
+    hist_values, hist_bins = gt_stats.vertex_hist(graph, "total")
+
+    plt.figure(figsize=(10, 6))
+    plt.bar(hist_bins[:-1], hist_values, width=np.diff(hist_bins), edgecolor="black", align="edge")
+
+    plt.xlabel('Degree')
+    plt.ylabel('Number of vertices')
+
+    # Use the graph file name as the title
+    graph_name = os.path.basename(graph_file)
+    plt.title(f'Degree distribution of {graph_name}')
+
+    # Create the degree_histogram directory if it doesn't exist
+    if not os.path.exists('degree_histogram'):
+        os.makedirs('degree_histogram')
+
+    # Save the histogram as an image file in the degree_histogram directory
+    plt.savefig(f'degree_histogram/{graph_name}_degree_distribution.png')
+
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python graph_info.py <graph_file>")
@@ -63,3 +90,5 @@ if __name__ == "__main__":
     print("Degree Distribution:")
     for degree, count in sorted(distribution.items()):
         print(f"Degree {degree}: {count} vertices")
+
+    degree_histogram(graph_tool_graph, graph_file)
