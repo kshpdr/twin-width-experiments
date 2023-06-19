@@ -7,7 +7,7 @@ test*
 out
 degree_histogram
 .idea
-.DS_Store
+**/.DS_Store
 scripts/twin_width
 __pycache__
 
