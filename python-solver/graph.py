@@ -167,6 +167,17 @@ class Graph:
         self.remove_vertex(twin)
         self.twin_width = max(self.twin_width, self.get_red_edges_amount())
 
+    def simulate_merge_vertices(self, v, u):
+        common_neighbors = set(self.get_neighbors(v)).intersection(self.get_neighbors(u))
+        all_neighbors = set(self.get_neighbors(v)).union(self.get_neighbors(u)).difference((v, u))
+        score = len(all_neighbors) - len(common_neighbors)
+        red_edges = self.get_red_edges_pro_vertex().a.copy()
+        red_edges[int(v)] += score
+        red_edges[int(u)] += score
+        for n in self.get_neighbors(v):
+            red_edges[int(n)] += 1
+        return red_edges.max()
+
 
     def optimized_merge_vertices(self, source, twin):
         source_neighbors = set(self.get_neighbors(source))

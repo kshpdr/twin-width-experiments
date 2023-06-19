@@ -259,7 +259,7 @@ def find_degree_contraction(input_graph: Graph):
 
 def find_degree_optimized_contraction(input_graph: Graph):
     """
-    Takes first 10 vertices with the lowest degree,
+    Takes first 20 vertices with the lowest degree,
     computes new red edges attached to those vertices,
     finds the best pair between them and merges it,
     update vertices' degrees
@@ -277,7 +277,8 @@ def find_degree_optimized_contraction(input_graph: Graph):
         vertices = np.array(list(input_graph.graph.vertices()))
         sorted_vertices = vertices[np.argsort(vertex_degrees)]
 
-        candidates = sorted_vertices[:20]
+        candidates = sorted_vertices[:30]
+        # candidates = sorted_vertices[-5:]
 
         merge_scores = []
 
@@ -319,6 +320,7 @@ def find_degree_merge_simulation_contraction(input_graph: Graph):
         degree_to_vertices[v.out_degree()].append(input_graph.get_vertex_id(v))
 
     while input_graph.graph.num_vertices() > 1:
+        start = time.time()
         vertices_by_degree = sorted(degree_to_vertices.keys())
         candidates = []
         for degree in vertices_by_degree:
@@ -351,6 +353,50 @@ def find_degree_merge_simulation_contraction(input_graph: Graph):
         degree_to_vertices = defaultdict(list)
         for v in input_graph.get_vertices():
             degree_to_vertices[v.out_degree()].append(input_graph.get_vertex_id(v))
+
+        print(f"c Cycle in {time.time() - start} sec")
+
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+
+    return current_sequence
+
+
+def find_degree_merge_simulation_optimized_contraction(input_graph: Graph):
+    """
+    Takes first 10 vertices with the lowest degree,
+    simulates the merge and computes twin-width,
+    finds the best pair between them and merges it,
+    update vertices' degrees
+    Complexity O(n^3)
+    """
+    current_sequence = ""
+
+    while input_graph.graph.num_vertices() > 1:
+        start = time.time()
+        vertex_degrees = input_graph.graph.get_out_degrees(input_graph.graph.get_vertices())
+
+        vertices = np.array(list(input_graph.graph.vertices()))
+        sorted_vertices = vertices[np.argsort(vertex_degrees)]
+
+        candidates = sorted_vertices[:20]
+
+        merge_scores = []
+
+        for v in candidates:
+            for u in candidates:
+                if v != u:
+                    merge_scores.append(((input_graph.get_vertex_id(v), input_graph.get_vertex_id(u)), input_graph.simulate_merge_vertices(v, u)))
+
+        best_pair = min(merge_scores, key=lambda x: x[1])[0] if merge_scores else None
+
+        v, u = best_pair
+        current_sequence += f"{v} {u} \n"
+        print(f"c Found ({input_graph.get_twin_width()}): {v} {u}")
+
+        v, u = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
+
+        input_graph.merge_vertices(v, u)
+        print(f"c Cycle in {time.time() - start} sec")
 
     current_sequence += f"c twin width: {input_graph.get_twin_width()}"
 
