@@ -1,0 +1,74 @@
+class Face:
+    def __init__(self, boundary, interior=None):
+        self.boundary = boundary
+        self.interior = interior if interior else []
+
+    def add_vertex(self, v):
+        self.interior.append(v)
+
+    def vertices(self):
+        return self.boundary + self.interior
+
+    def is_empty(self):
+        return len(self.interior) == 0
+
+
+find_contraction(H, S, L, contraction):
+    if len(H.vertices) == 1:
+        return solution
+    if len(S.vertices) == 0:
+        if len(max(L).intersects(H.vertices)) > 1:
+            v, u = random(max(L).intersects(H.vertices)), random(max(L).intersects(H.vertices))
+            contraction.add(v,u)
+            H.contract(v,u)
+            find_contraction(H, S, L, contraction)
+        elif len(max(L).intersects(H.vertices)) == 1:
+            v, u = (L).intersects(H.vertices)[0], random((max(L) - 1).intersects(H.vertices))
+            contraction.add(v,u)
+            H.contract(v,u)
+            find_contraction(H, S, L, contraction)
+
+
+def find_contraction(H, S, L, contraction):
+    if len(H.vertices) == 1:
+        return contraction
+
+    if len(S.vertices) == 0:
+        i = max([i for i, layer in enumerate(L) if set(layer).intersection(H.vertices)])
+
+        if len(L[i].intersection(H.vertices)) > 1:
+            v, u = select_two_vertices(L[i].intersection(H.vertices))
+            contraction.append((v, u))
+            H.contract(v, u)
+            return find_contraction(H, S, L, contraction)
+
+        elif len(L[i].intersection(H.vertices)) == 1 and i > 0:
+            v = select_one_vertex(L[i].intersection(H.vertices))
+            u = select_one_vertex(L[i-1].intersection(H.vertices))
+            contraction.append((v, u))
+            H.contract(v, u)
+            return find_contraction(H, S, L, contraction)
+    else:
+        if all(face.is_empty() for face in S.faces):
+            e, De = apply_lemma_6(T)  # T should be the BFS tree of S
+            x, Q = find_leaf_and_vertical_path(T, De)
+            S_prime = remove_vertices(S, Q.vertices)
+            return find_contraction(H, S_prime, L, contraction)
+
+def apply_lemma_6(G, T):
+    # The set E(G)\E(T) represents the edges in G but not in T.
+    edge_set = G.edges - T.edges
+
+    for edge in edge_set:
+        # For each edge e, we form a cycle De by adding edge e to T.
+        De = T.add_edge(edge)
+
+        # Now, we need to find the two faces of De.
+        faces = De.find_faces()
+
+        for face in faces:
+            # If a face contains precisely one leaf of T and not the root of T
+            if face.contains_exactly_one_leaf(T) and not face.contains_root(T):
+                return edge, De, face
+
+    return None, None, None

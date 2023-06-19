@@ -4,6 +4,7 @@ public class Graph {
     private Set<Vertex> vertices;
     private Map<Vertex, Set<Vertex>> edges;
     private Map<Vertex, Set<Vertex>> redEdges;
+    private Map<Integer, Set<Vertex>> degreeToVertices;
     public PriorityQueue<Vertex> vertexScores = new PriorityQueue<>(Comparator.comparingInt(Vertex::getScore));
     private int twinWidth = 0;
 
@@ -11,6 +12,7 @@ public class Graph {
         vertices = new HashSet<>();
         edges = new HashMap<>();
         redEdges = new HashMap<>();
+        degreeToVertices = new HashMap<>();
     }
 
     public void addVertex(Vertex v) {
@@ -20,13 +22,16 @@ public class Graph {
     }
 
     public void removeVertex(Vertex v) {
+        degreeToVertices.get(edges.get(v).size()).remove(v);
         vertices.remove(v);
         edges.replace(v, new HashSet<>());
         redEdges.replace(v, new HashSet<>());
 
         for (Vertex u : vertices) {
+            int oldDegreeU = edges.get(u).size();
             edges.get(u).remove(v);
             redEdges.get(u).remove(v);
+            updateDegreeToVerticesMapping(u, oldDegreeU);
         }
 
         vertexScores.remove(v);
@@ -43,11 +48,33 @@ public class Graph {
         return vertexArray[randomIndex];
     }
 
+    public Vertex getVertexFromInterval(Vertex v, int threshold) {
+        int lowerbound = Math.max(0, edges.get(v).size() - threshold);
+        int upperbound = Math.min(edges.get(v).size(), edges.get(v).size() + threshold);
+        Vertex bestVertex = getRandomVertex();
+        while (bestVertex.equals(v)) bestVertex = getRandomVertex();
+        int bestScore = getScore(v, bestVertex);
+        for (int i = lowerbound; i <= upperbound; i++){
+            HashSet<Vertex> candidates = (HashSet<Vertex>) getVerticesByDegree(i);
+            for (Vertex candidate : candidates){
+                if (v.equals(candidate)) continue;
+                int score = getScore(v, candidate);
+                if (score < bestScore){
+                    bestVertex = candidate;
+                    bestScore = score;
+                }
+            }
+        }
+        return bestVertex;
+    }
+
     public PriorityQueue<Vertex> getVertexScores() { return vertexScores; }
 
     public void addEdge(Vertex v, Vertex u) {
         edges.get(v).add(u);
         edges.get(u).add(v);
+        updateDegreeToVerticesMapping(v, edges.get(v).size() - 1);
+        updateDegreeToVerticesMapping(u, edges.get(u).size() - 1);
     }
 
 
@@ -57,10 +84,36 @@ public class Graph {
     }
 
     public void removeEdge(Vertex v, Vertex u) {
+        if (!edges.containsKey(v)){
+            System.out.println();
+        }
+        int oldDegreeV = edges.get(v).size();
+        int oldDegreeU = edges.get(u).size();
         edges.get(v).remove(u);
         edges.get(u).remove(v);
         redEdges.get(v).remove(u);
         redEdges.get(u).remove(v);
+        updateDegreeToVerticesMapping(v, oldDegreeV);
+        updateDegreeToVerticesMapping(u, oldDegreeU);
+    }
+
+    private void updateDegreeToVerticesMapping(Vertex v, int oldDegree) {
+        int newDegree = edges.get(v).size();
+
+        // Remove vertex from the old degree list
+        Set<Vertex> oldDegreeVertices = degreeToVertices.get(oldDegree);
+        if (oldDegreeVertices != null) {
+            oldDegreeVertices.remove(v);
+        }
+
+        // Add vertex to the new degree list
+        Set<Vertex> newDegreeVertices = degreeToVertices.computeIfAbsent(newDegree, k -> new HashSet<>());
+        newDegreeVertices.add(v);
+    }
+
+
+    public Set<Vertex> getVerticesByDegree(int degree) {
+        return degreeToVertices.getOrDefault(degree, new HashSet<>());
     }
 
     public Set<Vertex> getVertices() {

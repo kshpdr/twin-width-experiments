@@ -15,6 +15,7 @@ cd ..
 
 # Get the optional name parameter and current date/time
 subfolder="${1:-}"
+comment="${2:-}"
 current_date=$(date "+%Y-%m-%d")
 current_time=$(date "+%H-%M-%S")
 
@@ -22,14 +23,14 @@ current_time=$(date "+%H-%M-%S")
 function_name=$(grep -o 'find_[^()]*' python-solver/main.py | head -n 1 | sed 's/(.*//')
 
 # Create the output directories if they don't exist
-mkdir -p "scripts/out/$current_date/results"
-mkdir -p "scripts/out/$current_date/logs"
+mkdir -p "scripts/out/$current_date/results/$function_name"
+mkdir -p "scripts/out/$current_date/logs/$function_name"
 
 # Create the results and logs files
-results_file="${current_time}-results-python-${subfolder}-${function_name}.csv"
-logs_file="${current_time}-logs-python-${subfolder}-${function_name}.csv"
-echo "Test,Time,Vertices,Edges,Solution" > "scripts/out/$current_date/results/$results_file"
-echo "Test,Output" > "scripts/out/$current_date/logs/$logs_file"
+results_file="${current_time}-results-python-${subfolder}-${comment}-${function_name}.csv"
+logs_file="${current_time}-logs-python-${subfolder}-${comment}-${function_name}.csv"
+echo "Test,Time,Vertices,Edges,Solution" > "scripts/out/$current_date/results/$function_name/$results_file"
+echo "Test,Output" > "scripts/out/$current_date/logs/$function_name/$logs_file"
 
 # Prepare the find command based on the presence of a subfolder argument
 if [ -z "$subfolder" ]; then
@@ -73,8 +74,8 @@ eval "$find_command" | sort | while read -r test_file; do
     fi
 
     # Save the result and log
-    echo "$test_name,$elapsed_time,$vertices,$edges,$solution" >> "scripts/out/$current_date/results/$results_file"
-    echo "$test_name,\"$python_output\"" >> "scripts/out/$current_date/logs/$logs_file"
+    echo "$test_name,$elapsed_time,$vertices,$edges,$solution" >> "scripts/out/$current_date/results/$function_name/$results_file"
+    echo "$test_name,\"$python_output\"" >> "scripts/out/$current_date/logs/$function_name/$logs_file"
 
     # Print the elapsed time
     printf "%-30s %-10s %-10s %-10s %-10s\n" "$test_name" "${elapsed_time}s" "$vertices" "$edges" "$solution"

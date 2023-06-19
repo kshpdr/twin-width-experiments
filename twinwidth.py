@@ -9,7 +9,6 @@ import numpy as np
 
 class Graph:
     def __init__(self):
-
         self.graph = gt.Graph(directed=False)
         self.graph.properties[("v", "id")] = self.graph.new_vertex_property('int', val=False)
         self.graph.properties[("v", "red_edges")] = self.graph.new_vertex_property('int', val=False)

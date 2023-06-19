@@ -8,10 +8,10 @@ def read_input_graph_from_lines(input_lines):
     graph.add_vertices(num_vertices)
     density = 2.0 * num_edges / (num_vertices * (num_vertices - 1))
 
-    if density > 0.5:
-        for i in range(num_vertices):
-            for j in range(i + 1, num_vertices):
-                graph.add_edge(i, j)
+    # if density > 0.5:
+    #     for i in range(num_vertices):
+    #         for j in range(i + 1, num_vertices):
+    #             graph.add_edge(i, j)
 
     for line in input_lines[1:]:
         line = line.strip()
@@ -19,10 +19,10 @@ def read_input_graph_from_lines(input_lines):
             continue
         v_id, u_id = map(int, line.split())
 
-        if density > 0.5:
-            graph.remove_edge(v_id - 1, u_id - 1)
-        else:
-            graph.add_edge(v_id - 1, u_id - 1)
+        # if density > 0.5:
+        #     graph.remove_edge(v_id - 1, u_id - 1)
+        # else:
+        graph.add_edge(v_id - 1, u_id - 1)
 
     return graph
 

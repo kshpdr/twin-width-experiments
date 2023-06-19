@@ -1,14 +1,10 @@
-import sun.misc.Signal;
-import sun.misc.SignalHandler;
-
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;
 
 public class Solver {
@@ -46,6 +42,17 @@ public class Solver {
             }
             graph.mergeVertices(source, twin);
 //            twinWidth = Math.max(graph.getCurrentTwinWidth(), twinWidth);
+            mergedEdges.add(new Edge(source, twin));
+        }
+        return convertEdgesToStrings(mergedEdges);
+    }
+
+    public static LinkedList<String> findThresholdContractionSequence(Graph graph){
+        LinkedList<Edge> mergedEdges = new LinkedList<>();
+        while (graph.getSize() != 1){
+            Vertex source = graph.getRandomVertex();
+            Vertex twin = graph.getVertexFromInterval(source, 50);
+            graph.mergeVertices(source, twin);
             mergedEdges.add(new Edge(source, twin));
         }
         return convertEdgesToStrings(mergedEdges);
@@ -109,6 +116,18 @@ public class Solver {
         return convertEdgesToStrings(mergedEdges);
     }
 
+    public static LinkedList<String> findFastAndStupidContractionSequence(Graph graph){
+        LinkedList<Edge> mergedEdges = new LinkedList<>();
+        while (graph.getSize() != 1){
+            Iterator<Vertex> it = graph.getVertices().iterator();
+            Vertex v = it.next();
+            Vertex u = it.next();
+            graph.mergeVertices(v, u);
+            mergedEdges.add(new Edge(v, u));
+        }
+        return convertEdgesToStrings(mergedEdges);
+    }
+
     public static LinkedList<String> convertEdgesToStrings(LinkedList<Edge> edges) {
         LinkedList<String> result = new LinkedList<>();
         for (Edge e : edges) {
@@ -119,9 +138,9 @@ public class Solver {
 
 
     public static void main(String[] args) throws IOException {
-        BufferedReader bi = new BufferedReader(new InputStreamReader(System.in));
+//        BufferedReader bi = new BufferedReader(new InputStreamReader(System.in));
 //        BufferedReader bi = new BufferedReader(new FileReader("tests/custom-graphs/small-grid.gr"));
-//        BufferedReader bi = new BufferedReader(new FileReader("tests/heuristic-public/heuristic_200.gr"));
+        BufferedReader bi = new BufferedReader(new FileReader("tests/heuristic-public/heuristic_006.gr"));
 
         // might break optio output
 //        final CountDownLatch exit_now = new CountDownLatch(1);
@@ -162,7 +181,7 @@ public class Solver {
 
         StringBuilder sb = new StringBuilder();
 
-        for (String v : findBmsContractionSequence(graph)){
+        for (String v : findRandomContractionSequence(graph)){
             sb.append(v);
             sb.append("\n");
         }

@@ -1,4 +1,5 @@
 import graph_tool.all as gt
+import time
 
 
 class Graph:
@@ -102,7 +103,7 @@ class Graph:
         for e in list(v.out_edges()):
             self.remove_edge(v, e.target())
 
-        self.graph.remove_vertex(v)
+        self.graph.remove_vertex(v, fast = True)
 
     def remove_edge(self, v, u):
         edge = self.graph.edge(v, u)
@@ -127,6 +128,10 @@ class Graph:
         all_neighbors = set(self.get_neighbors(v)).union(self.get_neighbors(u)).difference((v, u))
         return len(all_neighbors) - len(common_neighbors)
 
+    def get_new_degree_after_merge(self, v, u):
+        all_neighbors = set(self.get_neighbors(v)).union(self.get_neighbors(u)).difference((v, u))
+        return len(all_neighbors)
+
     def get_red_edges_amount(self):
         return self.get_red_edges_pro_vertex().a.max()
 
@@ -137,8 +142,6 @@ class Graph:
                 self.mark_edge_red(dest, v)
 
     def merge_vertices(self, source, twin):
-        # print([f"{input_graph.get_vertex_id(e.source())} {input_graph.get_vertex_id(e.target())}: {input_graph.get_red_edges()[e]}" for e in input_graph.get_edges()])
-        # print([f"{input_graph.get_vertex_id(v)}: {input_graph.get_red_edges_pro_vertex()[v]}" for v in self.get_vertices()])
         source_neighbors = self.get_neighbors(source)
         twin_neighbors = self.get_neighbors(twin)
 
@@ -160,11 +163,36 @@ class Graph:
         self.mark_vertex_neighbors_red(source, twin_unique_neighbors)
 
         # remove merged vertex
-        self.delete_from_merge_costs(twin)
+        # self.delete_from_merge_costs(twin)
         self.remove_vertex(twin)
-        # print([f"{input_graph.get_vertex_id(e.source())} {input_graph.get_vertex_id(e.target())}: {input_graph.get_red_edges()[e]}" for e in input_graph.get_edges()])
-        # print([f"{input_graph.get_vertex_id(v)}: {input_graph.get_red_edges_pro_vertex()[v]}" for v in self.get_vertices()])
         self.twin_width = max(self.twin_width, self.get_red_edges_amount())
+
+
+    def optimized_merge_vertices(self, source, twin):
+        source_neighbors = set(self.get_neighbors(source))
+        twin_neighbors = set(self.get_neighbors(twin))
+
+        # # any edge (black or red) between x and y gets deleted
+        self.remove_edge(source, twin)
+
+        common_neighbors = source_neighbors & twin_neighbors
+        self.transfer_edges(twin, source, common_neighbors)
+
+        # #  x retains all black edges to its neighbors that are adjacent to y
+        # #  all edges from x to vertices that are not adjacent to y become red
+        source_unique_neighbors = source_neighbors - twin_neighbors - {twin}
+        self.mark_vertex_neighbors_red(source, source_unique_neighbors)
+
+        # # x is connected with a red edge to all vertices that are connected to y but not to x
+        twin_unique_neighbors = twin_neighbors - source_neighbors - {source}
+        new_edges = [(source, self.get_vertex(twin_neighbor), 0) for twin_neighbor in twin_unique_neighbors]
+        self.add_edges_from_tuple(new_edges)
+        self.mark_vertex_neighbors_red(source, twin_unique_neighbors)
+
+        # # remove merged vertex
+        # # self.delete_from_merge_costs(twin)
+        self.remove_vertex(twin)
+        # self.twin_width = max(self.twin_width, self.get_red_edges_amount())
 
     def delete_from_merge_costs(self, to_delete):
         for v in self.get_vertices():
@@ -172,3 +200,27 @@ class Graph:
                 del self.merge_costs[(self.get_vertex_id(v), self.get_vertex_id(to_delete))]
             if (self.get_vertex_id(to_delete), self.get_vertex_id(v)) in self.merge_costs:
                 del self.merge_costs[(self.get_vertex_id(to_delete), self.get_vertex_id(v))]
+
+    def get_sequence_from_paths(self):
+        sequence = ""
+        for v in self.get_vertices():
+            start = time.time()
+            if not v.is_valid(): continue
+            neighbors = self.get_neighbors(v)
+            if v.out_degree() == 1 and self.get_vertex(neighbors[0]).out_degree() == 2:
+                sequence += f"{self.get_vertex_id(self.get_vertex(neighbors[0]))} {self.get_vertex_id(v)} \n"
+                self.merge_vertices(self.get_vertex(neighbors[0]), v)
+                print("c Triggered")
+                print(f"c Cycle in {time.time() - start}")
+            elif v.out_degree() == 2:
+                if self.get_vertex(neighbors[0]).out_degree() == 2:
+                    sequence += f"{self.get_vertex_id(self.get_vertex(neighbors[0]))} {self.get_vertex_id(v)} \n"
+                    self.merge_vertices(self.get_vertex(neighbors[0]), v)
+                    print("c Triggered")
+                    print(f"c Cycle in {time.time() - start}")
+                elif self.get_vertex(neighbors[1]).out_degree() == 2:
+                    sequence += f"{self.get_vertex_id(self.get_vertex(neighbors[1]))} {self.get_vertex_id(v)} \n"
+                    self.merge_vertices(self.get_vertex(neighbors[1]), v)
+                    print("c Triggered")
+                    print(f"c Cycle in {time.time() - start}")
+        return sequence

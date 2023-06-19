@@ -1,6 +1,5 @@
 import os
 import sys
-
 from heuristics import *
 from input_reader import read_input_graph_from_lines, read_input_graph_from_file
 
@@ -18,6 +17,6 @@ if __name__ == '__main__':
         input_lines = sys.stdin.readlines()
         input_graph = read_input_graph_from_lines(input_lines)
 
-    print(find_degree_contraction(input_graph))
+    print(find_from_cliques_degree_contraction_sequence(input_graph))
 
     # best_sequence = simulate(input_graph)

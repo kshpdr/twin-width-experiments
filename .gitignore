@@ -2,8 +2,12 @@ overs JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, And
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
 
 tests
+out
+degree_histogram
 .idea
 .DS_Store
+scripts/twin_width
+__pycache__
 
 # User-specific stuff
 .idea/**/workspace.xml
