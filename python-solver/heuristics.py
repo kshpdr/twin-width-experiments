@@ -524,3 +524,42 @@ def find_red_edges_contraction(input_graph: Graph):
     current_sequence += f"c twin width: {input_graph.get_twin_width()}"
 
     return current_sequence
+
+
+def brute_force_twin_width_search(input_graph: Graph, best_twin_width=float('inf'), best_sequence=None):
+    print(f"c now is {input_graph.graph.num_vertices()}")
+    if best_sequence is None:
+        best_sequence = []
+
+    if input_graph.graph.num_vertices() == 1:
+        if input_graph.get_twin_width() < best_twin_width:
+            best_twin_width = input_graph.get_twin_width()
+            return best_twin_width, best_sequence
+
+    current_best_tw = best_twin_width
+    current_best_sequence = best_sequence.copy()
+    for v in input_graph.get_vertices():
+        for u in input_graph.get_vertices():
+            if u != v:
+                temp_graph = input_graph.graph.copy()
+
+                # Merging vertices in the temporary graph
+                temp_input_graph = Graph()
+                temp_input_graph.graph = temp_graph
+                temp_input_graph.twin_width = input_graph.get_twin_width()
+                temp_input_graph.merge_vertices(v, u)
+
+                current_twin_width = temp_input_graph.get_twin_width()
+                if current_twin_width < current_best_tw:
+                    temp_best_twin_width, temp_best_sequence = brute_force_twin_width_search(temp_input_graph, best_twin_width, best_sequence + [(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))])
+                    if temp_best_twin_width < current_best_tw:
+                        current_best_tw = temp_best_twin_width
+                        current_best_sequence = temp_best_sequence
+    return current_best_tw, current_best_sequence
+
+
+def find_brute_force_twin_width(input_graph: Graph):
+    twin_width, sequence = brute_force_twin_width_search(input_graph)
+    sequence_string = '\n'.join([f"{pair[0]} {pair[1]}" for pair in sequence])
+    return sequence_string + f"\nc twin width: {twin_width}"
+
