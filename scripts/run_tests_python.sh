@@ -83,3 +83,12 @@ eval "$find_command" | sort | while read -r test_file; do
     # Clean up the temporary files
     rm temp_python_output.txt temp_time.txt
 done
+
+# Create the stats directory if it doesn't exist
+mkdir -p "scripts/out/$current_date/stats/$function_name"
+
+# Define the stats file
+stats_file="${current_time}-stats-python-${subfolder}-${comment}-${function_name}.txt"
+
+# Call the Python script to compute the statistics
+python3 scripts/analyze_solutions.py "scripts/out/$current_date/results/$function_name/$results_file" > "scripts/out/$current_date/stats/$function_name/$stats_file"
