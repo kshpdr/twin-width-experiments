@@ -453,7 +453,7 @@ def find_table_set_merge_score_optimized_contraction_sequence(input_graph: Graph
             if v == u: continue
             input_graph.set_merge_cost(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u), input_graph.get_score(v, u))
             input_graph.set_merge_cost(input_graph.get_vertex_id(u), input_graph.get_vertex_id(v), input_graph.get_score(v, u))
-            print(f"c {v}, {u}")
+            # print(f"c {v}, {u}")
 
     while input_graph.graph.num_vertices() > 1:
         sorted_merge_costs = sorted(input_graph.merge_costs.items(), key=lambda item: item[1])
@@ -463,15 +463,17 @@ def find_table_set_merge_score_optimized_contraction_sequence(input_graph: Graph
         (v, u) = input_graph.get_vertex_by_id(v), input_graph.get_vertex_by_id(u)
 
         current_sequence += f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n"
-        print(f"с ({input_graph.graph.num_vertices()}) Found ({input_graph.get_merge_cost(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))}): ", input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))
+        # print(f"с ({input_graph.graph.num_vertices()}) Found ({input_graph.get_merge_cost(input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))}): ", input_graph.get_vertex_id(v), input_graph.get_vertex_id(u))
         input_graph.delete_from_merge_costs(u)
         input_graph.merge_vertices(v, u)
 
         for pair in top_20_pairs:
             (v1, v2) = pair[0]
-            score = input_graph.get_score(v1, v2)
-            input_graph.set_merge_cost(input_graph.get_vertex_id(v1), input_graph.get_vertex_id(v2), score)
-            input_graph.set_merge_cost(input_graph.get_vertex_id(v2), input_graph.get_vertex_id(v1), score)
+            v1, v2 = input_graph.get_vertex_by_id(v1), input_graph.get_vertex_by_id(v2)
+            if v2 != None and v1 != None:
+                score = input_graph.get_score(v1, v2)
+                input_graph.set_merge_cost(input_graph.get_vertex_id(v1), input_graph.get_vertex_id(v2), score)
+                input_graph.set_merge_cost(input_graph.get_vertex_id(v2), input_graph.get_vertex_id(v1), score)
 
     current_sequence += f"c twin width: {input_graph.get_twin_width()}"
 
@@ -562,4 +564,59 @@ def find_brute_force_twin_width(input_graph: Graph):
     twin_width, sequence = brute_force_twin_width_search(input_graph)
     sequence_string = '\n'.join([f"{pair[0]} {pair[1]}" for pair in sequence])
     return sequence_string + f"\nc twin width: {twin_width}"
+
+def find_two_neighborhood_contraction(input_graph: Graph):
+    """
+    Takes first 20 vertices with the lowest degree,
+    for each of them takes random 20 neighbors or 2-step-neighbors,
+    finds the best pair between them and merges it,
+    update vertices' degrees
+    Complexity O(n^2)
+    """
+    current_sequence = ""
+
+    current_sequence += input_graph.get_sequence_from_paths()
+
+    while input_graph.graph.num_vertices() > 1:
+        start_time = time.time()
+
+        vertex_degrees = input_graph.graph.get_out_degrees(input_graph.graph.get_vertices())
+
+        vertices = np.array(list(input_graph.graph.vertices()))
+        sorted_vertices = vertices[np.argsort(vertex_degrees)]
+
+        candidates = sorted_vertices[:20]
+        # candidates = sorted_vertices[-5:]
+        if input_graph.graph.num_edges() == 0:
+            pair = random.sample(list(candidates), 2)
+            v, u = input_graph.get_vertex(pair[0]), input_graph.get_vertex(pair[1])
+            current_sequence += f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n"
+            input_graph.merge_vertices(v, u)
+            continue
+
+        merge_scores = []
+
+        for v in candidates:
+            # neighbors = random.sample(input_graph.get_neighbors_and_2_step_neighbors(v), 20)
+            neighbors = input_graph.get_neighbors_and_2_step_neighbors(v)
+            neighbors = [input_graph.get_vertex(n) for n in neighbors]
+            for u in neighbors:
+                if v != u:
+                    merge_score = input_graph.get_score(v, u)
+                    merge_scores.append(((v, u), merge_score))
+
+        best_pair = min(merge_scores, key=lambda x: x[1])[0] if merge_scores else None
+        v, u = best_pair
+        current_sequence += f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n"
+        print(f"c Found ({input_graph.get_twin_width()}): {input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)}")
+
+        input_graph.merge_vertices(v, u)
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"c Time for loop: {elapsed_time} seconds")
+
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+
+    return current_sequence
 
