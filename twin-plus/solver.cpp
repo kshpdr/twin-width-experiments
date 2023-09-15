@@ -14,6 +14,12 @@
 using namespace std;
 using namespace std::chrono;
 
+struct PairHash {
+    size_t operator()(const pair<int, int>& p) const {
+        return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
+    }
+};
+
 ostringstream generateRandomContractionSequence(int numVertices) { 
     ostringstream contractionSequence;
 
@@ -132,9 +138,9 @@ public:
         redDegreeToVertices[oldDegree + diff].insert(vertex);
     }
 
-    std::vector<int> getTopNVerticesWithHighestRedDegree(int n) {
+    std::vector<int> getTopNVerticesWithLowestRedDegree(int n) {
         std::vector<int> topVertices;
-        for (auto it = redDegreeToVertices.rbegin(); it != redDegreeToVertices.rend() && topVertices.size() < n; ++it) {
+        for (auto it = redDegreeToVertices.begin(); it != redDegreeToVertices.end() && topVertices.size() < n; ++it) {
             for (int vertex : it->second) {
                 if (topVertices.size() >= n) break;
                 topVertices.push_back(vertex);
@@ -287,20 +293,33 @@ public:
 
     ostringstream findRedDegreeContraction(){ 
         ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
         
         while (vertices.size() > 1) {
             // auto start = high_resolution_clock::now();
 
-            vector<int> highestDegreeVertices = getTopNVerticesWithHighestRedDegree(20);
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
             
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
 
-            for (int i = 0; i < highestDegreeVertices.size(); i++) {
-                for (int j = i+1; j < highestDegreeVertices.size(); j++) {
-                    int v1 = highestDegreeVertices[i];
-                    int v2 = highestDegreeVertices[j];
-                    int score = getScore(v1, v2);
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                for (int j = i+1; j < lowestDegreeVertices.size(); j++) {
+                    int v1 = lowestDegreeVertices[i];
+                    int v2 = lowestDegreeVertices[j];
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
                     
                     if (score < bestScore) {
                         bestScore = score;
