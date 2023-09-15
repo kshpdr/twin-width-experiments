@@ -3,6 +3,7 @@ import java.util.Objects;
 public class Vertex {
     private final int id;
     public int score = 0;
+    public int degree = 0;
 
     public Vertex(int id) {
         this.id = id;
@@ -13,6 +14,8 @@ public class Vertex {
     }
 
     public int getScore() { return score; }
+
+    public int getDegree() { return degree; }
 
     @Override
     public boolean equals(Object o) {

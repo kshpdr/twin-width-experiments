@@ -1,6 +1,9 @@
+import random
+import graph_tool
 import graph_tool.all as gt
 import time
-
+from graph_tool import *
+from typing import List
 
 class Graph:
     def __init__(self):
@@ -8,7 +11,9 @@ class Graph:
         self.graph = gt.Graph(directed=False)
         self.graph.properties[("v", "id")] = self.graph.new_vertex_property('int', val=False)
         self.graph.properties[("v", "red_edges")] = self.graph.new_vertex_property('int', val=False)
+        self.graph.properties[("v", "red_edges_neighbors")] = self.graph.new_vertex_property('object') # store ids
         self.graph.properties[("e", "red_edges")] = self.graph.new_edge_property('bool', val=False)
+        # self.graph.set_fast_edge_removal(fast=True)
         self.twin_width = 0
         self.merge_costs = {}
 
@@ -46,7 +51,7 @@ class Graph:
 
 
     def print_edges(self):
-        print([f"{e.source()} {e.target()}" for e in self.get_edges()])
+        print("c Edges:", [f"{e.source()} {e.target()}" for e in self.get_edges()])
 
     def print_vp(self, name):
         print(list(self.graph.vp[name]))
@@ -74,6 +79,18 @@ class Graph:
     def get_red_edges_pro_vertex(self):
         return self.graph.properties[("v", "red_edges")]
 
+    def get_red_edges_neighbors_pro_vertex(self, vertex):
+        return self.graph.vp.red_edges_neighbors[vertex]
+
+    def set_red_edges_neighbors_pro_vertex(self, vertex: Vertex, neighbors: List[Vertex]):
+        self.graph.vp.red_edges_neighbors[vertex] = [self.get_vertex_id(n) for n in neighbors]
+
+    def add_neighbor_to_red_edges_neighbors(self, vertex: Vertex, neighbor: Vertex):
+        self.graph.vp.red_edges_neighbors[vertex].add(self.get_vertex_id(neighbor))
+
+    def remove_neighbor_from_red_edges_neighbors(self, vertex: Vertex, neighbor: Vertex):
+        self.graph.vp.red_edges_neighbors[vertex].remove(self.get_vertex_id(neighbor))
+
     def get_vertices_id(self):
         return self.graph.properties[("v", "id")]
 
@@ -81,6 +98,7 @@ class Graph:
         self.graph.add_vertex(n)
         for i in range(n):
             self.graph.properties[("v", "id")][i] = i + 1
+            self.graph.properties[("v", "red_edges_neighbors")][i] = set()
 
     def add_edge(self, v, u):
         self.graph.add_edge(v, u)
@@ -89,30 +107,49 @@ class Graph:
         for e_tuple in edges:
             self.add_edge(e_tuple[0], e_tuple[1])
 
-    def mark_edge_red(self, v, u):
-        if self.get_red_edges()[self.get_edge(v, u)] == False:
-            self.get_red_edges()[self.get_edge(v, u)] = True
-            self.get_red_edges_pro_vertex()[v] += 1
-            self.get_red_edges_pro_vertex()[u] += 1
+    def mark_edge_red(self, edge: graph_tool.Edge):
+        source, target = edge.source(), edge.target()
+        if not self.get_red_edges()[edge]:
+            self.get_red_edges()[edge] = True
+            self.get_red_edges_pro_vertex()[source] += 1
+            self.get_red_edges_pro_vertex()[target] += 1
+            # self.add_neighbor_to_red_edges_neighbors(source, target)
+            # self.add_neighbor_to_red_edges_neighbors(target, source)
 
     def mark_vertex_neighbors_red(self, source, neighbors):
         for neighbor in neighbors:
-            self.mark_edge_red(source, neighbor)
+            self.mark_edge_red(self.get_edge(source, neighbor))
 
     def remove_vertex(self, v):
         for e in list(v.out_edges()):
-            self.remove_edge(v, e.target())
+            self.remove_edge(e)
+
+        # ADD HERE DECREMENTING OF RED NEIGHBORS WHILE DELETING
+        # for neighbor_id in self.get_red_edges_neighbors_pro_vertex(v):
+        #     neighbor = self.get_vertex_by_id(neighbor_id)
+        #     if self.get_edge(neighbor, v): self.get_red_edges()[self.get_edge(neighbor, v)] = 0
+        #     self.get_red_edges_pro_vertex()[neighbor] -= 1
+        #     self.remove_neighbor_from_red_edges_neighbors(neighbor, v)
 
         self.graph.remove_vertex(v, fast = True)
 
-    def remove_edge(self, v, u):
-        edge = self.graph.edge(v, u)
+    # def remove_edge(self, v, u):
+    #     edge = self.graph.edge(v, u)
+    #     if edge:
+    #         self.graph.remove_edge(edge)
+    #         if self.get_red_edges()[edge] == 1:
+    #             self.get_red_edges()[edge] = 0  # since when deleting edges its index becomes vacant
+    #             self.get_red_edges_pro_vertex()[v] -= 1
+    #             self.get_red_edges_pro_vertex()[u] -= 1
+
+    # optimizing
+    def remove_edge(self, edge):
         if edge:
-            self.graph.remove_edge(edge)
             if self.get_red_edges()[edge] == 1:
                 self.get_red_edges()[edge] = 0  # since when deleting edges its index becomes vacant
-                self.get_red_edges_pro_vertex()[v] -= 1
-                self.get_red_edges_pro_vertex()[u] -= 1
+                self.get_red_edges_pro_vertex()[edge.source()] -= 1
+                self.get_red_edges_pro_vertex()[edge.target()] -= 1
+            self.graph.remove_edge(edge)
 
     def get_vertex_id(self, v):
         return self.graph.properties[("v", "id")][v]
@@ -124,29 +161,35 @@ class Graph:
         return self.graph.get_out_neighbors(v)
 
     def get_score(self, v, u):
-        common_neighbors = set(self.get_neighbors(v)).intersection(self.get_neighbors(u))
-        all_neighbors = set(self.get_neighbors(v)).union(self.get_neighbors(u)).difference((v, u))
-        return len(all_neighbors) - len(common_neighbors)
+        neighbors_v = set(self.get_neighbors(v))
+        neighbors_u = set(self.get_neighbors(u))
+        # common_neighbors = neighbors_v & neighbors_u
+        # all_neighbors = (neighbors_v | neighbors_u) - {v, u}
+        return len(neighbors_v.symmetric_difference(neighbors_u) - {v,u})
+
+    def get_intersection_size(self, v, u):
+        return len(set(self.get_neighbors(v)).intersection(self.get_neighbors(u)))
 
     def get_new_degree_after_merge(self, v, u):
         all_neighbors = set(self.get_neighbors(v)).union(self.get_neighbors(u)).difference((v, u))
         return len(all_neighbors)
 
     def get_red_edges_amount(self):
-        return self.get_red_edges_pro_vertex().a.max()
+        return max(self.get_red_edges_pro_vertex().a)
 
     def transfer_edges(self, src, dest, common_neighbors):
         for v in common_neighbors:
-            e = self.get_edge(src, v)
-            if self.get_red_edges()[e] == 1 and self.get_red_edges()[self.get_edge(dest, v)] == 0:
-                self.mark_edge_red(dest, v)
+            e1 = self.get_edge(src, v)
+            e2 = self.get_edge(dest, v)
+            if self.get_red_edges()[e1] == 1 and self.get_red_edges()[e2] == 0:
+                self.mark_edge_red(e2)
 
     def merge_vertices(self, source, twin):
         source_neighbors = self.get_neighbors(source)
         twin_neighbors = self.get_neighbors(twin)
 
         # any edge (black or red) between x and y gets deleted
-        self.remove_edge(source, twin)
+        self.remove_edge(self.get_edge(source, twin))
 
         common_neighbors = set(source_neighbors).intersection(set(twin_neighbors))
         self.transfer_edges(twin, source, common_neighbors)
@@ -184,7 +227,7 @@ class Graph:
         twin_neighbors = set(self.get_neighbors(twin))
 
         # # any edge (black or red) between x and y gets deleted
-        self.remove_edge(source, twin)
+        self.remove_edge(self.get_edge(source, twin))
 
         common_neighbors = source_neighbors & twin_neighbors
         self.transfer_edges(twin, source, common_neighbors)
@@ -203,7 +246,7 @@ class Graph:
         # # remove merged vertex
         # # self.delete_from_merge_costs(twin)
         self.remove_vertex(twin)
-        # self.twin_width = max(self.twin_width, self.get_red_edges_amount())
+        self.twin_width = max(self.twin_width, self.get_red_edges_amount())
 
     def delete_from_merge_costs(self, to_delete):
         for v in self.get_vertices():
@@ -212,9 +255,13 @@ class Graph:
             if (self.get_vertex_id(to_delete), self.get_vertex_id(v)) in self.merge_costs:
                 del self.merge_costs[(self.get_vertex_id(to_delete), self.get_vertex_id(v))]
 
+    def get_random_vertex(self, vertex):
+        for u in self.get_vertices():
+            if vertex != u: return u
+
     def get_sequence_from_paths(self):
         sequence = ""
-        for v in self.get_vertices():
+        for v in reversed(sorted(self.get_vertices())):
             start = time.time()
             if not v.is_valid(): continue
             neighbors = self.get_neighbors(v)
@@ -235,3 +282,22 @@ class Graph:
                     print("c Triggered")
                     print(f"c Cycle in {time.time() - start}")
         return sequence
+
+    def get_two_neighborhood(self, vertex, limit=None):
+        neighbors = self.graph.get_all_neighbors(vertex)
+
+        if len(neighbors) > limit:
+            return [self.get_vertex(i) for i in neighbors][:limit]
+
+        two_step_neighbors = []
+        for neighbor in neighbors[:limit]:
+            two_step_neighbors.extend(self.graph.get_all_neighbors(neighbor))
+            if len(two_step_neighbors) > limit:
+                break
+
+        all_neighbors = list(set(list(neighbors) + list(two_step_neighbors)))
+        if vertex in all_neighbors: all_neighbors.remove(vertex)
+
+        all_neighbors = [self.get_vertex(i) for i in all_neighbors]
+        random.shuffle(all_neighbors)
+        return all_neighbors[:limit]

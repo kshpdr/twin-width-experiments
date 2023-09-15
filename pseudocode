@@ -1,0 +1,53 @@
+def find_degree_optimized_contraction(input_graph: Graph):
+    """
+    Takes first 20 vertices with the lowest degree,
+    computes new red edges attached to those vertices,
+    finds the best pair between them and merges it,
+    update vertices' degrees
+    Complexity O(n^2)
+    """
+    current_sequence = ""
+
+    current_sequence += input_graph.get_sequence_from_paths()
+
+    while input_graph.graph.num_vertices() > 1:
+        start_time = time.time()
+
+        vertex_degrees = input_graph.graph.get_out_degrees(input_graph.graph.get_vertices())
+
+        vertices = np.array(list(input_graph.graph.vertices()))
+        sorted_vertices = vertices[np.argsort(vertex_degrees)]
+
+        candidates = sorted_vertices[:30]
+        # candidates = sorted_vertices[-5:]
+
+        merge_scores = []
+
+        for v in candidates:
+            for u in candidates:
+                if v != u:
+                    merge_score = input_graph.get_score(v, u)
+                    merge_scores.append(((v, u), merge_score))
+
+        best_pair = min(merge_scores, key=lambda x: x[1])[0] if merge_scores else None
+
+        v, u = best_pair
+        current_sequence += f"{input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)} \n"
+        print(f"c Found ({input_graph.get_twin_width()}): {input_graph.get_vertex_id(v)} {input_graph.get_vertex_id(u)}")
+
+        input_graph.merge_vertices(v, u)
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"c Time for loop: {elapsed_time} seconds")
+
+    current_sequence += f"c twin width: {input_graph.get_twin_width()}"
+
+    return current_sequence
+
+
+function find_lowest_degree_contraction:
+    while |V| > 1:
+        canditates <- first 20 vertices with lowest degree
+        for each v in candidates:
+            for each u in canditates:

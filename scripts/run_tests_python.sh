@@ -66,6 +66,11 @@ eval "$find_command" | sort | while read -r test_file; do
     verifier_output=$(python3 scripts/verifier.py "$test_file" <(printf "%s" "$python_output") 2>&1)
     verifier_solution=$(echo "$verifier_output" | perl -nle 'print $1 if /Width: (\d+)/')
 
+    # If python_solution is empty, update it to the format "tww: N"
+    if [ -z "$python_solution" ]; then
+        python_solution="$verifier_solution"
+    fi
+
     if [ "$python_solution" == "$verifier_solution" ]; then
         solution="$python_solution"
     else

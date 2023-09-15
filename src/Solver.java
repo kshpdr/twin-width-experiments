@@ -2,9 +2,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.*;
 import java.util.stream.IntStream;
 
 public class Solver {
@@ -136,11 +134,38 @@ public class Solver {
         return result;
     }
 
+    public static LinkedList<String> findDegreeContraction(Graph graph){
+        LinkedList<Edge> mergedEdges = new LinkedList<>();
+        while (graph.getSize() != 1){
+            ArrayList<Vertex> topVertices = graph.getTopNVerticesByDegree(20, true);
+            int minScore = Integer.MAX_VALUE;
+            Vertex bestV = null;
+            Vertex bestU = null;
+
+            for (Vertex v : topVertices){
+                for (Vertex u : topVertices) {
+                    if (v.equals(u)) continue;
+                    int score = graph.getScore(v, u);
+                    if (score < minScore){
+                        minScore = score;
+                        bestV = v;
+                        bestU = u;
+                    }
+                }
+            }
+
+            if (bestV != null && bestU != null){
+                graph.mergeVertices(bestV, bestU);
+                mergedEdges.add(new Edge(bestV, bestU, minScore));
+            }
+        }
+        return convertEdgesToStrings(mergedEdges);
+    }
 
     public static void main(String[] args) throws IOException {
-//        BufferedReader bi = new BufferedReader(new InputStreamReader(System.in));
+        BufferedReader bi = new BufferedReader(new InputStreamReader(System.in));
 //        BufferedReader bi = new BufferedReader(new FileReader("tests/custom-graphs/small-grid.gr"));
-        BufferedReader bi = new BufferedReader(new FileReader("tests/heuristic-public/heuristic_006.gr"));
+//        BufferedReader bi = new BufferedReader(new FileReader("tests/heuristic-public/heuristic_020.gr"));
 
         // might break optio output
 //        final CountDownLatch exit_now = new CountDownLatch(1);

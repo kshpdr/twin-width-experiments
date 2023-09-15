@@ -2,6 +2,7 @@ import java.util.*;
 
 public class Graph {
     private Set<Vertex> vertices;
+    private LinkedList<Vertex> verticesList;
     private Map<Vertex, Set<Vertex>> edges;
     private Map<Vertex, Set<Vertex>> redEdges;
     private Map<Integer, Set<Vertex>> degreeToVertices;
@@ -10,6 +11,7 @@ public class Graph {
 
     public Graph() {
         vertices = new HashSet<>();
+        verticesList = new LinkedList<>();
         edges = new HashMap<>();
         redEdges = new HashMap<>();
         degreeToVertices = new HashMap<>();
@@ -17,6 +19,7 @@ public class Graph {
 
     public void addVertex(Vertex v) {
         vertices.add(v);
+        verticesList.add(v);
         edges.put(v, new HashSet<>());
         redEdges.put(v, new HashSet<>());
     }
@@ -24,6 +27,7 @@ public class Graph {
     public void removeVertex(Vertex v) {
         degreeToVertices.get(edges.get(v).size()).remove(v);
         vertices.remove(v);
+        verticesList.remove(v);
         edges.replace(v, new HashSet<>());
         redEdges.replace(v, new HashSet<>());
 
@@ -73,6 +77,8 @@ public class Graph {
     public void addEdge(Vertex v, Vertex u) {
         edges.get(v).add(u);
         edges.get(u).add(v);
+        verticesList.get(verticesList.indexOf(v)).degree++;
+        verticesList.get(verticesList.indexOf(u)).degree++;
         updateDegreeToVerticesMapping(v, edges.get(v).size() - 1);
         updateDegreeToVerticesMapping(u, edges.get(u).size() - 1);
     }
@@ -93,6 +99,8 @@ public class Graph {
         edges.get(u).remove(v);
         redEdges.get(v).remove(u);
         redEdges.get(u).remove(v);
+        v.degree--;
+        u.degree--;
         updateDegreeToVerticesMapping(v, oldDegreeV);
         updateDegreeToVerticesMapping(u, oldDegreeU);
     }
@@ -291,6 +299,14 @@ public class Graph {
             }
         }
         return lowerbound;
+    }
+
+    public ArrayList<Vertex> getTopNVerticesByDegree(int n, boolean highest) {
+        verticesList.sort(Comparator.comparingInt(Vertex::getDegree));
+
+        return highest ?
+                new ArrayList<Vertex>(verticesList. subList(verticesList.size() - n, verticesList.size())) :
+                new ArrayList<Vertex>(verticesList.subList(0, n));
     }
 
     @Override
