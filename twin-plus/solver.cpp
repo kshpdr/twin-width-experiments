@@ -61,6 +61,14 @@ private:
 public:
     Graph() {}
 
+    Graph(const Graph &g) {
+        this->vertices = g.vertices;
+        this->adjListBlack = g.adjListBlack;
+        this->adjListRed = g.adjListRed;
+        this->redDegreeToVertices = g.redDegreeToVertices;
+        this->width = g.width;
+    }
+
     void addVertex(int v){
         vertices.insert(v);
         updateVertexRedDegree(v, 0);
@@ -127,6 +135,49 @@ public:
         redDegreeToVertices[adjListRed[vertex].size()].erase(vertex);
     }
 
+    pair<set<int>, set<int>> removeVertexAndReturnNeighbors(int vertex) {        
+        // Remove the vertex from the black adjacency list and update neighbors
+        set<int> blackNeighbors;
+        set<int> redNeighbors;
+        if (adjListBlack.find(vertex) != adjListBlack.end()) {
+            for (int neighbor : adjListBlack[vertex]) {
+                removeEdge(neighbor, vertex);
+                blackNeighbors.insert(neighbor);
+            }
+
+            adjListBlack.erase(vertex);
+        }
+        
+        // Remove the vertex from the red adjacency list and update neighbors
+        if (adjListRed.find(vertex) != adjListRed.end()) {
+            for (int neighbor : adjListRed[vertex]) {
+                removeEdge(neighbor, vertex);
+                redNeighbors.insert(neighbor);
+            }
+            adjListRed.erase(vertex);
+        }
+        
+        vertices.erase(vertex);
+        redDegreeToVertices[adjListRed[vertex].size()].erase(vertex);
+        pair<set<int>, set<int>> neighbors = make_pair(blackNeighbors, redNeighbors);
+        return neighbors;
+    }
+
+    void addBackVertex(int vertex, pair<set<int>, set<int>> neighbors){
+        addVertex(vertex);
+        for (int neighbor : neighbors.first) {
+            addEdge(vertex, neighbor);
+        }
+
+        for (int neighbor : neighbors.second) {
+            addEdge(vertex, neighbor, "red");
+        }
+    }
+
+    int getWidth() const {
+        return width;
+    }
+
     void updateVertexRedDegree(int vertex, int diff) {
         int oldDegree = adjListRed[vertex].size();
         
@@ -177,6 +228,28 @@ public:
         }
     }
 
+    ankerl::unordered_dense::set<int> transferRedEdgesAndReturnNeighbors(int fromVertex, int toVertex) {
+        ankerl::unordered_dense::set<int> neighbors;
+        // If the twin vertex has red edges
+        if(adjListRed.find(fromVertex) != adjListRed.end()) {
+            for (int vertex : adjListRed[fromVertex]) {
+                if (adjListRed[toVertex].find(vertex) == adjListRed[toVertex].end()) {
+                    addEdge(toVertex, vertex, "red");
+                    neighbors.insert(vertex);
+                }
+            }
+        }
+        return neighbors;
+    }
+
+    void deleteTransferedEdges(int vertex, ankerl::unordered_dense::set<int> neighbors) {
+        if(!neighbors.empty()) {
+            for (int neighbor : neighbors) {
+                removeEdge(vertex, neighbor);
+            }
+        }
+    }
+
     void markUniqueEdgesRed(int source, int twin) {
         // Convert the unordered_dense::set to std::set for set operations
         std::set<int> source_neighbors(adjListBlack[source].begin(), adjListBlack[source].end());
@@ -197,6 +270,36 @@ public:
             }
         }
     }
+
+    std::set<int> markUniqueEdgesRedAndReturnNeighbors(int source, int twin) {
+        // Convert the unordered_dense::set to std::set for set operations
+        std::set<int> source_neighbors(adjListBlack[source].begin(), adjListBlack[source].end());
+        std::set<int> twin_neighbors(adjListBlack[twin].begin(), adjListBlack[twin].end());
+
+        std::set<int> toBecomeRed;
+        std::set_difference(
+            source_neighbors.begin(), source_neighbors.end(),
+            twin_neighbors.begin(), twin_neighbors.end(),
+            std::inserter(toBecomeRed, toBecomeRed.begin())
+        );
+
+        for (int v : toBecomeRed) {
+            removeEdge(source, v);
+            // don't understand why is this possible since were considering only black edges
+            if (adjListRed[source].find(v) == adjListRed[source].end()) {
+                addEdge(source, v, "red");
+            }
+        }
+        return toBecomeRed;
+    }
+
+    void unmarkUniqueEdgesRed(int vertex, set<int> neighbors){
+        for (int neighbor : neighbors) {
+            removeEdge(vertex, neighbor);
+            addEdge(vertex, neighbor);
+        }
+    }
+
 
     // something wrong here
     void addNewRedNeighbors(int source, int twin) {
@@ -225,6 +328,70 @@ public:
         }
     }
 
+    set<int> addNewRedNeighborsAndReturnThem(int source, int twin) {
+        // Merge red and black edges for both source and twin
+        std::set<int> mergedSourceNeighbors(adjListBlack[source].begin(), adjListBlack[source].end());
+        if (adjListRed.find(source) != adjListRed.end()) {
+            mergedSourceNeighbors.insert(adjListRed[source].begin(), adjListRed[source].end());
+        }
+
+        std::set<int> mergedTwinNeighbors(adjListBlack[twin].begin(), adjListBlack[twin].end());
+        if (adjListRed.find(twin) != adjListRed.end()) {
+            mergedTwinNeighbors.insert(adjListRed[twin].begin(), adjListRed[twin].end());
+        }
+
+        // Find edges of twin that are not adjacent to source
+        std::set<int> newRedEdges;
+        std::set_difference(
+            mergedTwinNeighbors.begin(), mergedTwinNeighbors.end(),
+            mergedSourceNeighbors.begin(), mergedSourceNeighbors.end(),
+            std::inserter(newRedEdges, newRedEdges.end())
+        );
+
+        // Add these edges as red edges for source
+        for (int v : newRedEdges) {
+            addEdge(source, v, "red");
+        }
+        return newRedEdges;
+    }
+
+    void deleteNewNeighbors(int source, set<int> neighbors) {
+        for (int neighbor : neighbors) {
+            removeEdge(source, neighbor);
+        }
+    }
+
+
+    int getRealScore(int source, int twin) {
+        Graph graphCopy(*this);   // Assuming you've implemented the copy constructor for Graph class
+
+        // Merge vertices on the copied graph
+        graphCopy.mergeVertices(source, twin);
+
+        // Return the updated width of the copied graph
+        return graphCopy.getWidth();
+
+        // bool blackEdgeExists = adjListBlack[source].contains(twin);
+        // bool redEdgeExists = adjListRed[source].contains(twin);
+
+        // removeEdge(source, twin);
+        // ankerl::unordered_dense::set<int> transferedNeighbors = transferRedEdgesAndReturnNeighbors(twin, source);
+        // set<int> uniqueNeighbors = markUniqueEdgesRedAndReturnNeighbors(source, twin);
+        // set<int> newNeighbors = addNewRedNeighborsAndReturnThem(source, twin);
+        // pair<set<int>, set<int>> twinNeighbors = removeVertexAndReturnNeighbors(twin);
+        // int score = getUpdatedWidth();
+
+        // if (blackEdgeExists) addEdge(source, twin);
+        // else if (redEdgeExists) addEdge(source, twin, "red");
+    
+        // deleteTransferedEdges(source, transferedNeighbors);
+        // unmarkUniqueEdgesRed(source, uniqueNeighbors);
+        // deleteNewNeighbors(source, newNeighbors);
+        // addBackVertex(twin, twinNeighbors);
+
+        // return score;
+    }
+
     int getScore(int v1, int v2) {
         ankerl::unordered_dense::set<int> neighbors_v1_temp = adjListBlack[v1];
         if (adjListRed.find(v1) != adjListRed.end()) {
@@ -239,27 +406,37 @@ public:
         // Convert to std::set for set operations
         std::set<int> neighbors_v1(neighbors_v1_temp.begin(), neighbors_v1_temp.end());
         std::set<int> neighbors_v2(neighbors_v2_temp.begin(), neighbors_v2_temp.end());
+        std::set<int> symmetric_difference;
 
-        std::set<int> common_neighbors;
-        std::set<int> all_neighbors;
-        std::set<int> all_neighbors_minus_common;
+        std::set_symmetric_difference(neighbors_v1.begin(), neighbors_v1.end(),
+                                    neighbors_v2.begin(), neighbors_v2.end(),
+                                    std::inserter(symmetric_difference, symmetric_difference.begin()));
 
-        std::set_intersection(neighbors_v1.begin(), neighbors_v1.end(),
-                            neighbors_v2.begin(), neighbors_v2.end(),
-                            std::inserter(common_neighbors, common_neighbors.begin()));
+        symmetric_difference.erase(v1);
+        symmetric_difference.erase(v2);
 
-        std::set_union(neighbors_v1.begin(), neighbors_v1.end(),
-                    neighbors_v2.begin(), neighbors_v2.end(),
-                    std::inserter(all_neighbors, all_neighbors.begin()));
+        return symmetric_difference.size();
 
-        all_neighbors.erase(v1);
-        all_neighbors.erase(v2);
+        // std::set<int> common_neighbors;
+        // std::set<int> all_neighbors;
+        // std::set<int> all_neighbors_minus_common;
 
-        std::set_difference(all_neighbors.begin(), all_neighbors.end(),
-                            common_neighbors.begin(), common_neighbors.end(),
-                            std::inserter(all_neighbors_minus_common, all_neighbors_minus_common.begin()));
+        // std::set_intersection(neighbors_v1.begin(), neighbors_v1.end(),
+        //                     neighbors_v2.begin(), neighbors_v2.end(),
+        //                     std::inserter(common_neighbors, common_neighbors.begin()));
 
-        return all_neighbors_minus_common.size();
+        // std::set_union(neighbors_v1.begin(), neighbors_v1.end(),
+        //             neighbors_v2.begin(), neighbors_v2.end(),
+        //             std::inserter(all_neighbors, all_neighbors.begin()));
+
+        // all_neighbors.erase(v1);
+        // all_neighbors.erase(v2);
+
+        // std::set_difference(all_neighbors.begin(), all_neighbors.end(),
+        //                     common_neighbors.begin(), common_neighbors.end(),
+        //                     std::inserter(all_neighbors_minus_common, all_neighbors_minus_common.begin()));
+
+        // return all_neighbors_minus_common.size();
     }
 
     ostringstream findRandomContraction(){ 
@@ -296,7 +473,7 @@ public:
         ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
         
         while (vertices.size() > 1) {
-            // auto start = high_resolution_clock::now();
+            auto start = high_resolution_clock::now();
 
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
             
@@ -317,7 +494,7 @@ public:
                         score = it->second;
                     }
                     else {
-                        score = getScore(v1, v2);
+                        score = getRealScore(v1, v2);
                         scores[{v1, v2}] = score;
                     }
                     
@@ -331,13 +508,13 @@ public:
             contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
             mergeVertices(bestPair.first, bestPair.second);
 
-            // auto stop = high_resolution_clock::now();
-            // auto duration = duration_cast<milliseconds>(stop - start);
-            // int seconds_part = duration.count() / 1000;
-            // int milliseconds_part = duration.count() % 1000;
-            // std::cout << "c (Left " << vertices.size() << ") Cycle in " << seconds_part << "." 
-            // << std::setfill('0') << std::setw(9) << milliseconds_part 
-            // << " seconds" << std::endl;
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Left " << vertices.size() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
         }
         return contractionSequence;
     }
@@ -348,6 +525,14 @@ private:
         for (const auto& pair : adjListRed) {
             width = max(width, static_cast<int>(pair.second.size()));
         }
+    }
+
+    int getUpdatedWidth() {
+        int updatedWidth;
+        for (const auto& pair : adjListRed) {
+            updatedWidth = max(updatedWidth, static_cast<int>(pair.second.size()));
+        }
+        return updatedWidth;
     }
 };
 
