@@ -457,9 +457,6 @@ public:
             auto start = high_resolution_clock::now();
 
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
-
-            const int N = 5; // Change to desired N
-            vector<pair<int, pair<int, int>>> bestNPairs;
             
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
@@ -482,23 +479,16 @@ public:
                         scores[{v1, v2}] = score;
                     }
                     
-                    if (bestNPairs.size() < N || score < bestNPairs.back().first) {
-                        if (bestNPairs.size() == N) {
-                            bestNPairs.pop_back();
-                        }
-                        bestNPairs.push_back({score, {v1, v2}});
-                        std::sort(bestNPairs.begin(), bestNPairs.end());
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
                     }
                 }
             }
 
-            for (auto& entry : bestNPairs) {
-                int v1 = entry.second.first;
-                int v2 = entry.second.second;
-                contractionSequence << v1 + 1 << " " << v2 + 1 << "\n";
-                mergeVertices(v1, v2);
-            }
-            
+            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            mergeVertices(bestPair.first, bestPair.second);
+
             auto elapsed_time = high_resolution_clock::now() - heuristic_start_time;
             if (elapsed_time > TIME_LIMIT) {
                 contractionSequence << generateRandomContractionSequence(vertices).str();
