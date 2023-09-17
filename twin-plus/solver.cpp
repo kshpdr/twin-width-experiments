@@ -14,20 +14,21 @@
 using namespace std;
 using namespace std::chrono;
 
+const auto TIME_LIMIT = std::chrono::seconds(3);
+
 struct PairHash {
     size_t operator()(const pair<int, int>& p) const {
         return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
     }
 };
 
-ostringstream generateRandomContractionSequence(int numVertices) { 
+ostringstream generateRandomContractionSequence(const ankerl::unordered_dense::set<int>& verticesSet) {
     ostringstream contractionSequence;
 
     std::random_device rd;
     std::mt19937 gen(rd());
 
-    std::vector<int> vertices(numVertices);
-    std::iota(vertices.begin(), vertices.end(), 0);
+    std::vector<int> vertices(verticesSet.begin(), verticesSet.end());
 
     while (vertices.size() > 1) {
         std::uniform_int_distribution<> dist(0, vertices.size() - 1);
@@ -363,33 +364,33 @@ public:
 
 
     int getRealScore(int source, int twin) {
-        Graph graphCopy(*this);   // Assuming you've implemented the copy constructor for Graph class
+        // Graph graphCopy(*this);   // Assuming you've implemented the copy constructor for Graph class
 
-        // Merge vertices on the copied graph
-        graphCopy.mergeVertices(source, twin);
+        // // Merge vertices on the copied graph
+        // graphCopy.mergeVertices(source, twin);
 
-        // Return the updated width of the copied graph
-        return graphCopy.getWidth();
+        // // Return the updated width of the copied graph
+        // return graphCopy.getWidth();
 
-        // bool blackEdgeExists = adjListBlack[source].contains(twin);
-        // bool redEdgeExists = adjListRed[source].contains(twin);
+        bool blackEdgeExists = adjListBlack[source].contains(twin);
+        bool redEdgeExists = adjListRed[source].contains(twin);
 
-        // removeEdge(source, twin);
-        // ankerl::unordered_dense::set<int> transferedNeighbors = transferRedEdgesAndReturnNeighbors(twin, source);
-        // set<int> uniqueNeighbors = markUniqueEdgesRedAndReturnNeighbors(source, twin);
-        // set<int> newNeighbors = addNewRedNeighborsAndReturnThem(source, twin);
-        // pair<set<int>, set<int>> twinNeighbors = removeVertexAndReturnNeighbors(twin);
-        // int score = getUpdatedWidth();
+        removeEdge(source, twin);
+        ankerl::unordered_dense::set<int> transferedNeighbors = transferRedEdgesAndReturnNeighbors(twin, source);
+        set<int> uniqueNeighbors = markUniqueEdgesRedAndReturnNeighbors(source, twin);
+        set<int> newNeighbors = addNewRedNeighborsAndReturnThem(source, twin);
+        pair<set<int>, set<int>> twinNeighbors = removeVertexAndReturnNeighbors(twin);
+        int score = getUpdatedWidth();
 
-        // if (blackEdgeExists) addEdge(source, twin);
-        // else if (redEdgeExists) addEdge(source, twin, "red");
+        if (blackEdgeExists) addEdge(source, twin);
+        else if (redEdgeExists) addEdge(source, twin, "red");
     
-        // deleteTransferedEdges(source, transferedNeighbors);
-        // unmarkUniqueEdgesRed(source, uniqueNeighbors);
-        // deleteNewNeighbors(source, newNeighbors);
-        // addBackVertex(twin, twinNeighbors);
+        deleteTransferedEdges(source, transferedNeighbors);
+        unmarkUniqueEdgesRed(source, uniqueNeighbors);
+        deleteNewNeighbors(source, newNeighbors);
+        addBackVertex(twin, twinNeighbors);
 
-        // return score;
+        return score;
     }
 
     int getScore(int v1, int v2) {
@@ -416,27 +417,6 @@ public:
         symmetric_difference.erase(v2);
 
         return symmetric_difference.size();
-
-        // std::set<int> common_neighbors;
-        // std::set<int> all_neighbors;
-        // std::set<int> all_neighbors_minus_common;
-
-        // std::set_intersection(neighbors_v1.begin(), neighbors_v1.end(),
-        //                     neighbors_v2.begin(), neighbors_v2.end(),
-        //                     std::inserter(common_neighbors, common_neighbors.begin()));
-
-        // std::set_union(neighbors_v1.begin(), neighbors_v1.end(),
-        //             neighbors_v2.begin(), neighbors_v2.end(),
-        //             std::inserter(all_neighbors, all_neighbors.begin()));
-
-        // all_neighbors.erase(v1);
-        // all_neighbors.erase(v2);
-
-        // std::set_difference(all_neighbors.begin(), all_neighbors.end(),
-        //                     common_neighbors.begin(), common_neighbors.end(),
-        //                     std::inserter(all_neighbors_minus_common, all_neighbors_minus_common.begin()));
-
-        // return all_neighbors_minus_common.size();
     }
 
     ostringstream findRandomContraction(){ 
@@ -471,6 +451,7 @@ public:
     ostringstream findRedDegreeContraction(){ 
         ostringstream contractionSequence;
         ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
         
         while (vertices.size() > 1) {
             auto start = high_resolution_clock::now();
@@ -494,7 +475,7 @@ public:
                         score = it->second;
                     }
                     else {
-                        score = getRealScore(v1, v2);
+                        score = getScore(v1, v2);
                         scores[{v1, v2}] = score;
                     }
                     
@@ -507,6 +488,12 @@ public:
 
             contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
             mergeVertices(bestPair.first, bestPair.second);
+
+            auto elapsed_time = high_resolution_clock::now() - heuristic_start_time;
+            if (elapsed_time > TIME_LIMIT) {
+                contractionSequence << generateRandomContractionSequence(vertices).str();
+                break;
+            }
 
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(stop - start);
