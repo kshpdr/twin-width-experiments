@@ -506,6 +506,86 @@ public:
         return contractionSequence;
     }
 
+    ostringstream findRedDegreeContractionMultipleVertices(){ 
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            
+            // Container to store top 5 pairs of the iteration
+            vector<pair<int, pair<int, int>>> topPairs; 
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                for (int j = i+1; j < lowestDegreeVertices.size(); j++) {
+                    int v1 = lowestDegreeVertices[i];
+                    int v2 = lowestDegreeVertices[j];
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    // Check if either vertex is already in topPairs. If so, skip.
+                    bool alreadyExists = false;
+                    for (const auto& topPair : topPairs) {
+                        if (topPair.second.first == v1 || topPair.second.first == v2 || topPair.second.second == v1 || topPair.second.second == v2) {
+                            alreadyExists = true;
+                            break;
+                        }
+                    }
+                    if (alreadyExists) continue;
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+
+                    if (topPairs.size() < 5) {
+                        topPairs.push_back({score, {v1, v2}});
+                    }
+                    else {
+                        // Find the pair with the worst score and replace if current score is better
+                        auto worstPairIt = std::max_element(topPairs.begin(), topPairs.end(), [](const auto& a, const auto& b) {
+                            return a.first < b.first;
+                        });
+                        if (score < worstPairIt->first) {
+                            *worstPairIt = {score, {v1, v2}};
+                        }
+                    }
+                }
+            }
+
+            // Contract the top pairs and remove from scores
+            for (const auto& topPair : topPairs) {
+                contractionSequence << topPair.second.first + 1 << " " << topPair.second.second + 1 << "\n";
+                mergeVertices(topPair.second.first, topPair.second.second);
+                scores.erase(topPair.second);
+            }
+
+            auto elapsed_time = high_resolution_clock::now() - heuristic_start_time;
+            if (elapsed_time > TIME_LIMIT) {
+                contractionSequence << generateRandomContractionSequence(vertices).str();
+                break;
+            }
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Left " << vertices.size() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+        return contractionSequence;
+    }
+
 
 private:
     void updateWidth() {
