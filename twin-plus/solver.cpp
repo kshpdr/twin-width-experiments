@@ -14,7 +14,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const auto TIME_LIMIT = std::chrono::seconds(3);
+const auto TIME_LIMIT = std::chrono::seconds(270);
 
 struct PairHash {
     size_t operator()(const pair<int, int>& p) const {
@@ -545,8 +545,6 @@ int main() {
         if (tokens[0] == "p" && tokens[1] == "tww") {
             numVertices = stoi(tokens[2]);
             numEdges = stoi(tokens[3]);
-            // cout << generateRandomContractionSequence(numVertices).str();
-            // return 0;
             g.addVertices(numVertices);
         } else {
             int u = stoi(tokens[0]);
