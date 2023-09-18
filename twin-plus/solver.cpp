@@ -607,6 +607,8 @@ int main() {
     Graph g;
     string line;
     int numVertices, numEdges;
+    set<pair<int, int>> readEdges;
+    bool constructComplement = false;
 
     auto start = high_resolution_clock::now(); 
 
@@ -626,10 +628,29 @@ int main() {
             numVertices = stoi(tokens[2]);
             numEdges = stoi(tokens[3]);
             g.addVertices(numVertices);
+
+            double density = (2.0 * numEdges) / (numVertices * (numVertices - 1));
+            if (density > 0.5) {
+                constructComplement = true;
+            }
+        } else if (constructComplement) {
+            int u = stoi(tokens[0]);
+            int v = stoi(tokens[1]);
+            readEdges.insert({min(u-1, v-1), max(u-1, v-1)});
         } else {
             int u = stoi(tokens[0]);
             int v = stoi(tokens[1]);
             g.addEdge(u - 1, v - 1, "black");
+        }
+    }
+
+    if (constructComplement) {
+        for (int i = 0; i < numVertices; i++) {
+            for (int j = i + 1; j < numVertices; j++) {
+                if (readEdges.find({i, j}) == readEdges.end()) {
+                    g.addEdge(i, j, "black");
+                }
+            }
         }
     }
 
