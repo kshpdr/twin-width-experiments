@@ -58,7 +58,7 @@ private:
     ankerl::unordered_dense::map<int, ankerl::unordered_dense::set<int>> adjListRed;    // For red edges
     std::map<int, ankerl::unordered_dense::set<int>> redDegreeToVertices;
     // std::map<int, ankerl::unordered_dense::set<int>> degreeToVertices;
-    bool useRedDegreeMap = false;
+    bool useRedDegreeMap = true;
     // bool useDegreeMap = false;
     int width = 0; 
 
@@ -119,6 +119,10 @@ public:
         }
     }
 
+    ankerl::unordered_dense::set<int> getVertices() {
+        return vertices;
+    }
+
     ankerl::unordered_dense::map<int, ankerl::unordered_dense::set<int>> getAdjListBlack() {
         return adjListBlack;
     }
@@ -126,6 +130,51 @@ public:
     ankerl::unordered_dense::map<int, ankerl::unordered_dense::set<int>> getAdjListRed() {
         return adjListRed;
     }
+
+    void dfs(int v, ankerl::unordered_dense::set<int>& visited, std::vector<int>& component) {
+        visited.insert(v);
+        component.push_back(v);
+        
+        // For black edges
+        for (int neighbor : adjListBlack[v]) {
+            if (visited.find(neighbor) == visited.end()) {
+                dfs(neighbor, visited, component);
+            }
+        }
+
+        // For red edges
+        for (int neighbor : adjListRed[v]) {
+            if (visited.find(neighbor) == visited.end()) {
+                dfs(neighbor, visited, component);
+            }
+        }
+    }
+
+    std::vector<Graph> findConnectedComponents() {
+        ankerl::unordered_dense::set<int> visited;
+        std::vector<Graph> componentGraphs;
+
+        for (int vertex : vertices) {
+            if (visited.find(vertex) == visited.end()) {
+                std::vector<int> component;
+                dfs(vertex, visited, component);
+                Graph subGraph;
+                for (int v : component) {
+                    subGraph.addVertex(v);
+                    for (int neighbor : adjListBlack[v]) {
+                        if (v < neighbor) { 
+                            subGraph.addEdge(v, neighbor, "black");
+                        }
+                    }
+                }
+
+                componentGraphs.push_back(subGraph);
+            }
+        }
+
+        return componentGraphs;
+    }
+
 
     ankerl::unordered_dense::set<int> getTwoNeighborhood(int vertex) {
         ankerl::unordered_dense::set<int> firstNeighbors;
@@ -843,7 +892,20 @@ int main() {
     auto duration = duration_cast<seconds>(stop - start);
     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
 
-    cout << g.findRedDegreeContraction().str();
+    std::vector<Graph> components = g.findConnectedComponents();
+    std::vector<int> remainingVertices;
+    for (Graph& c : components) {
+        cout << c.findRedDegreeContraction().str();
+        int remainingVertex = *c.getVertices().begin() + 1;
+        remainingVertices.push_back(remainingVertex);
+    }
+
+    int primaryVertex = remainingVertices[0];
+    for (size_t i = 1; i < remainingVertices.size(); ++i) {
+        cout << primaryVertex << " " << remainingVertices[i] << endl;
+    }
+
+    // cout << g.findRedDegreeContraction().str();
 
     auto final_stop = high_resolution_clock::now();
     auto final_duration = duration_cast<seconds>(final_stop - start);
