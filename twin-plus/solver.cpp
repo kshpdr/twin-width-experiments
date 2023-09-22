@@ -303,6 +303,21 @@ public:
         return topVertices;
     }
 
+    vector<int> getTopNVerticesWithLowestRedDegreeFromPartition(vector<int>& partition, int n) {
+        vector<int> topVertices;
+        int count = 0;
+        for (auto it = redDegreeToVertices.begin(); it != redDegreeToVertices.end() && count < n; ++it) {
+            for (int vertex : it->second) {
+                if (std::find(partition.begin(), partition.end(), vertex) != partition.end()) { // Ensure vertex is in the given partition
+                    topVertices.push_back(vertex);
+                    count++;
+                    if (count >= n) break;
+                }
+            }
+        }
+        return topVertices;
+    }
+
     // std::vector<int> getTopNVerticesWithLowestDegree(int n) {
     //     std::vector<int> topVertices;
     //     for (auto it = degreeToVertices.begin(); it != degreeToVertices.end() && topVertices.size() < n; ++it) {
@@ -672,6 +687,96 @@ public:
         return contractionSequence;
     }
 
+    ostringstream findRedDegreeContractionPartitioned(vector<int>& partition1, vector<int>& partition2) {
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+
+        auto heuristic_start_time = high_resolution_clock::now();
+
+        while (vertices.size() > 1) {
+            if (vertices.size() == 2) {
+                int v = *vertices.begin();
+                int u = *(++vertices.begin());
+                contractionSequence << v + 1 << " " << u + 1 << "\n";
+                mergeVertices(v, u);
+                break;
+            }
+
+            auto start = high_resolution_clock::now();
+
+            // Get the top vertices with the lowest red degree from both partitions.
+            vector<int> candidates1 = getTopNVerticesWithLowestRedDegreeFromPartition(partition1, 10);
+            vector<int> candidates2 = getTopNVerticesWithLowestRedDegreeFromPartition(partition2, 10);
+
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            // Get scores for candidates from the first partition
+            for (int i = 0; i < candidates1.size(); i++) {
+                for (int j = i + 1; j < candidates1.size(); j++) {
+                    int v1 = candidates1[i];
+                    int v2 = candidates1[j];
+                    if (v2 > v1) std::swap(v1, v2);
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    } else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            // Repeat for the second partition
+            for (int i = 0; i < candidates2.size(); i++) {
+                for (int j = i + 1; j < candidates2.size(); j++) {
+                    int v1 = candidates2[i];
+                    int v2 = candidates2[j];
+                    if (v2 > v1) std::swap(v1, v2);
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    } else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            mergeVertices(bestPair.first, bestPair.second);
+
+            auto elapsed_time = high_resolution_clock::now() - heuristic_start_time;
+            if (elapsed_time > TIME_LIMIT) {
+                contractionSequence << generateRandomContractionSequence(vertices).str();
+                break;
+            }
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Left " << vertices.size() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+        return contractionSequence;
+    }
+
     // ostringstream findDegreeContraction(){ 
     //     ostringstream contractionSequence;
     //     ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
@@ -947,11 +1052,11 @@ int main() {
 
     std::vector<Graph> components = g.findConnectedComponents();
     std::vector<int> remainingVertices;
-    std::vector<int> partition1;
-    std::vector<int> partition2;
     for (Graph& c : components) {
-        bool bipartite = c.isBipartite(partition1, partition2);
-        cout << c.findRedDegreeContraction().str();
+        std::vector<int> partition1;
+        std::vector<int> partition2;
+        if (c.isBipartite(partition1, partition2)) cout << c.findRedDegreeContractionPartitioned(partition1, partition2).str();
+        else cout << c.findRedDegreeContraction().str();
         int remainingVertex = *c.getVertices().begin() + 1;
         remainingVertices.push_back(remainingVertex);
     }
