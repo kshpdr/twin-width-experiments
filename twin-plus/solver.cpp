@@ -10,6 +10,7 @@
 #include <chrono>
 #include <iomanip> 
 #include <unordered_dense.h>
+#include <queue>
 
 using namespace std;
 using namespace std::chrono;
@@ -531,6 +532,58 @@ public:
         return symmetric_difference.size();
     }
 
+    bool isBipartite(std::vector<int>& partition1, std::vector<int>& partition2) {
+        std::map<int, int> color; // 0: not visited, 1: color1, -1: color2
+        for(int v : vertices) {
+            color[v] = 0;
+        }
+
+        std::queue<int> q;
+
+        for(int v : vertices) {
+            if (color[v] == 0) {
+                q.push(v);
+                color[v] = 1;
+
+                while (!q.empty()) {
+                    int current = q.front();
+                    q.pop();
+
+                    // Explore neighbors
+                    for (int neighbor : adjListBlack[current]) {
+                        if (color[neighbor] == 0) {
+                            color[neighbor] = -color[current]; // Assign opposite color
+                            q.push(neighbor);
+                        } else if (color[neighbor] == color[current]) {
+                            // Two adjacent vertices have the same color -> graph is not bipartite
+                            return false;
+                        }
+                    }
+
+                    for (int neighbor : adjListRed[current]) {
+                        if (color[neighbor] == 0) {
+                            color[neighbor] = -color[current];
+                            q.push(neighbor);
+                        } else if (color[neighbor] == color[current]) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Populate the partitions based on colors
+        for (auto& kv : color) {
+            if (kv.second == 1) {
+                partition1.push_back(kv.first);
+            } else if (kv.second == -1) {
+                partition2.push_back(kv.first);
+            }
+        }
+
+        return true;
+    }
+
     ostringstream findRandomContraction(){ 
         ostringstream contractionSequence;
 
@@ -894,7 +947,10 @@ int main() {
 
     std::vector<Graph> components = g.findConnectedComponents();
     std::vector<int> remainingVertices;
+    std::vector<int> partition1;
+    std::vector<int> partition2;
     for (Graph& c : components) {
+        bool bipartite = c.isBipartite(partition1, partition2);
         cout << c.findRedDegreeContraction().str();
         int remainingVertex = *c.getVertices().begin() + 1;
         remainingVertices.push_back(remainingVertex);
