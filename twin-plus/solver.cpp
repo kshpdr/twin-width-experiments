@@ -15,7 +15,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const auto TIME_LIMIT = std::chrono::seconds(1000);
+const auto TIME_LIMIT = std::chrono::seconds(1);
 
 struct PairHash {
     size_t operator()(const pair<int, int>& p) const {
@@ -995,6 +995,16 @@ private:
     }
 };
 
+string getLastLine(ostringstream& oss) {
+    const string& s = oss.str();
+    auto lastNewlinePos = s.rfind('\n', s.length() - 2); // Start search before the very last character, which is likely a newline.
+    if (lastNewlinePos != string::npos) {
+        return s.substr(lastNewlinePos + 1); // Returns string after the last newline.
+    } else {
+        return s; // Return the entire string if there's no newline (i.e., it's a one-line string).
+    }
+}
+
 int main() {
     Graph g;
     string line;
@@ -1055,10 +1065,22 @@ int main() {
     for (Graph& c : components) {
         std::vector<int> partition1;
         std::vector<int> partition2;
-        if (c.isBipartite(partition1, partition2)) cout << c.findRedDegreeContractionPartitioned(partition1, partition2).str();
-        else cout << c.findRedDegreeContraction().str();
-        int remainingVertex = *c.getVertices().begin() + 1;
-        remainingVertices.push_back(remainingVertex);
+        // if (c.isBipartite(partition1, partition2)) cout << c.findRedDegreeContractionPartitioned(partition1, partition2).str();
+        // else cout << c.findRedDegreeContraction().str();
+        ostringstream componentContraction = c.findRedDegreeContraction();
+        cout << componentContraction.str();
+        if (c.getVertices().size() == 1){
+            int remainingVertex = *c.getVertices().begin() + 1;
+            remainingVertices.push_back(remainingVertex);
+        }
+        else {
+            // Extract here the last remaining vertex from the findRedDegreeContraction's output and push it back to remaining vertices
+            string lastLine = getLastLine(componentContraction);
+            stringstream lastPair(lastLine);
+            int remainingVertex;
+            lastPair >> remainingVertex;
+            remainingVertices.push_back(remainingVertex);
+        }
     }
 
     int primaryVertex = remainingVertices[0];
