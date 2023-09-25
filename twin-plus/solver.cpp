@@ -1065,8 +1065,11 @@ int main() {
     for (Graph& c : components) {
         std::vector<int> partition1;
         std::vector<int> partition2;
-        // if (c.isBipartite(partition1, partition2)) cout << c.findRedDegreeContractionPartitioned(partition1, partition2).str();
-        // else cout << c.findRedDegreeContraction().str();
+        ostringstream componentContraction;
+        
+        if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
+        else componentContraction = c.findRedDegreeContraction();
+
         ostringstream componentContraction = c.findRedDegreeContraction();
         cout << componentContraction.str();
         if (c.getVertices().size() == 1){
