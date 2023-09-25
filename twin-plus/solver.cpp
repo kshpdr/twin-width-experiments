@@ -15,7 +15,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const auto TIME_LIMIT = std::chrono::seconds(1);
+const auto TIME_LIMIT = std::chrono::seconds(290);
 
 struct PairHash {
     size_t operator()(const pair<int, int>& p) const {
@@ -1026,7 +1026,7 @@ int main() {
             tokens.push_back(token);
         }
 
-        if (tokens[0] == "p" && tokens[1] == "tww") {
+        if (tokens[0] == "p") {
             numVertices = stoi(tokens[2]);
             numEdges = stoi(tokens[3]);
             g.addVertices(numVertices);
@@ -1066,11 +1066,10 @@ int main() {
         std::vector<int> partition1;
         std::vector<int> partition2;
         ostringstream componentContraction;
-        
+
         if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
         else componentContraction = c.findRedDegreeContraction();
 
-        ostringstream componentContraction = c.findRedDegreeContraction();
         cout << componentContraction.str();
         if (c.getVertices().size() == 1){
             int remainingVertex = *c.getVertices().begin() + 1;
