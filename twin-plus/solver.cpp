@@ -15,7 +15,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const auto TIME_LIMIT = std::chrono::seconds(290);
+const auto TIME_LIMIT = std::chrono::seconds(5);
 
 struct PairHash {
     size_t operator()(const pair<int, int>& p) const {
@@ -58,9 +58,9 @@ private:
     ankerl::unordered_dense::map<int, ankerl::unordered_dense::set<int>> adjListBlack;  // For black edges
     ankerl::unordered_dense::map<int, ankerl::unordered_dense::set<int>> adjListRed;    // For red edges
     std::map<int, ankerl::unordered_dense::set<int>> redDegreeToVertices;
-    // std::map<int, ankerl::unordered_dense::set<int>> degreeToVertices;
+    std::map<int, ankerl::unordered_dense::set<int>> degreeToVertices;
     bool useRedDegreeMap = true;
-    // bool useDegreeMap = false;
+    bool useDegreeMap = true;
     int width = 0; 
 
 public:
@@ -71,8 +71,8 @@ public:
         this->adjListBlack = g.adjListBlack;
         this->adjListRed = g.adjListRed;
         this->redDegreeToVertices = g.redDegreeToVertices;
-        // this->degreeToVertices = g.degreeToVertices;
-        // this->useDegreeMap = g.useDegreeMap;
+        this->degreeToVertices = g.degreeToVertices;
+        this->useDegreeMap = g.useDegreeMap;
         this->useRedDegreeMap = g.useRedDegreeMap;
         this->width = g.width;
     }
@@ -90,8 +90,8 @@ public:
     }
 
     void addEdge(int v1, int v2, const string& color = "black") {
-        // updateVertexDegree(v1, 1);
-        // updateVertexDegree(v2, 1);
+        updateVertexDegree(v1, 1);
+        updateVertexDegree(v2, 1);
         if (color == "black") {
             adjListBlack[v1].insert(v2);
             adjListBlack[v2].insert(v1);
@@ -106,13 +106,13 @@ public:
     void removeEdge(int v1, int v2) {
         if (adjListBlack[v1].find(v2) != adjListBlack[v1].end()) {
             // order matters since updateVertexDegree uses adjListBlack's state
-            // updateVertexDegree(v1, -1);
-            // updateVertexDegree(v2, -1);
+            updateVertexDegree(v1, -1);
+            updateVertexDegree(v2, -1);
             adjListBlack[v1].erase(v2);
             adjListBlack[v2].erase(v1);
         } else if (adjListRed[v1].find(v2) != adjListRed[v1].end()) {
-            // updateVertexDegree(v1, -1);
-            // updateVertexDegree(v2, -1);
+            updateVertexDegree(v1, -1);
+            updateVertexDegree(v2, -1);
             updateVertexRedDegree(v1, -1);
             updateVertexRedDegree(v2, -1);
             adjListRed[v1].erase(v2);
@@ -176,6 +176,51 @@ public:
         return componentGraphs;
     }
 
+    ostringstream applyOneDegreeRule() {
+        ostringstream contractionSequence;
+
+        // Get all the one-degree vertices
+        auto oneDegreeVertices = degreeToVertices[1];
+        if(oneDegreeVertices.empty()) return contractionSequence;
+
+        // Convert the set to a vector for easier random access and shuffling
+        std::vector<int> oneDegreeList(oneDegreeVertices.begin(), oneDegreeVertices.end());
+
+        std::random_device rd;
+        std::mt19937 g(rd());
+        int count = 0;
+
+        while(oneDegreeList.size() > 1) {
+            auto start = high_resolution_clock::now();
+            // Shuffle the list to achieve randomness
+            std::shuffle(oneDegreeList.begin(), oneDegreeList.end(), g);
+
+            // Create a new list for vertices that will be the result of the contractions
+            std::vector<int> newOneDegreeList;
+
+            // Contract vertices in pairs
+            for(size_t i = 0; i + 1 < oneDegreeList.size(); i += 2) {
+                contractionSequence << oneDegreeList[i] + 1 << " " << oneDegreeList[i+1] + 1 << "\n"; // Adjusting to 1-based index
+                mergeVertices(oneDegreeList[i], oneDegreeList[i+1]); // Assuming mergeVertices returns the resulting vertex
+                newOneDegreeList.push_back(oneDegreeList[i]);
+                count++;
+            }
+
+            // Set the new list as the current list for the next iteration
+            oneDegreeList = newOneDegreeList;
+            
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Merged " << count << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+
+        return contractionSequence;
+    }
+
 
     ankerl::unordered_dense::set<int> getTwoNeighborhood(int vertex) {
         ankerl::unordered_dense::set<int> firstNeighbors;
@@ -221,7 +266,7 @@ public:
         
         vertices.erase(vertex);
         redDegreeToVertices[adjListRed[vertex].size()].erase(vertex);
-        // degreeToVertices[adjListBlack[vertex].size() + adjListRed[vertex].size()].erase(vertex);
+        degreeToVertices[adjListBlack[vertex].size() + adjListRed[vertex].size()].erase(vertex);
     }
 
     pair<set<int>, set<int>> removeVertexAndReturnNeighbors(int vertex) {        
@@ -248,7 +293,7 @@ public:
         
         vertices.erase(vertex);
         redDegreeToVertices[adjListRed[vertex].size()].erase(vertex);
-        // degreeToVertices[adjListBlack[vertex].size() + adjListRed[vertex].size()].erase(vertex);
+        degreeToVertices[adjListBlack[vertex].size() + adjListRed[vertex].size()].erase(vertex);
         pair<set<int>, set<int>> neighbors = make_pair(blackNeighbors, redNeighbors);
         return neighbors;
     }
@@ -280,17 +325,17 @@ public:
         redDegreeToVertices[oldDegree + diff].insert(vertex);
     }
 
-    // void updateVertexDegree(int vertex, int diff) {
-    //     if (!useDegreeMap) return;
-    //     int oldDegree = adjListRed[vertex].size() + adjListBlack[vertex].size();
+    void updateVertexDegree(int vertex, int diff) {
+        if (!useDegreeMap) return;
+        int oldDegree = adjListRed[vertex].size() + adjListBlack[vertex].size();
         
-    //     degreeToVertices[oldDegree].erase(vertex);
-    //     if (degreeToVertices[oldDegree].empty()) {
-    //         degreeToVertices.erase(oldDegree);
-    //     }
+        degreeToVertices[oldDegree].erase(vertex);
+        if (degreeToVertices[oldDegree].empty()) {
+            degreeToVertices.erase(oldDegree);
+        }
 
-    //     degreeToVertices[oldDegree + diff].insert(vertex);
-    // }
+        degreeToVertices[oldDegree + diff].insert(vertex);
+    }
 
     std::vector<int> getTopNVerticesWithLowestRedDegree(int n) {
         std::vector<int> topVertices;
@@ -318,16 +363,16 @@ public:
         return topVertices;
     }
 
-    // std::vector<int> getTopNVerticesWithLowestDegree(int n) {
-    //     std::vector<int> topVertices;
-    //     for (auto it = degreeToVertices.begin(); it != degreeToVertices.end() && topVertices.size() < n; ++it) {
-    //         for (int vertex : it->second) {
-    //             if (topVertices.size() >= n) break;
-    //             topVertices.push_back(vertex);
-    //         }
-    //     }
-    //     return topVertices;
-    // }
+    std::vector<int> getTopNVerticesWithLowestDegree(int n) {
+        std::vector<int> topVertices;
+        for (auto it = degreeToVertices.begin(); it != degreeToVertices.end() && topVertices.size() < n; ++it) {
+            for (int vertex : it->second) {
+                if (topVertices.size() >= n) break;
+                topVertices.push_back(vertex);
+            }
+        }
+        return topVertices;
+    }
 
     void mergeVertices(int source, int twin){
         auto start = high_resolution_clock::now();
@@ -1066,6 +1111,8 @@ int main() {
         std::vector<int> partition1;
         std::vector<int> partition2;
         ostringstream componentContraction;
+
+        cout << c.applyOneDegreeRule().str();
 
         if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
         else componentContraction = c.findRedDegreeContraction();
