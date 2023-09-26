@@ -15,7 +15,8 @@
 using namespace std;
 using namespace std::chrono;
 
-const auto TIME_LIMIT = std::chrono::seconds(5);
+const auto TIME_LIMIT = std::chrono::seconds(300);
+const int SCORE_RESET_THRESHOLD = 500000000;
 
 struct PairHash {
     size_t operator()(const pair<int, int>& p) const {
@@ -61,7 +62,7 @@ private:
     std::map<int, ankerl::unordered_dense::set<int>> degreeToVertices;
     bool useRedDegreeMap = true;
     bool useDegreeMap = true;
-    int width = 0; 
+    int width = 0;
 
 public:
     Graph() {}
@@ -176,12 +177,55 @@ public:
         return componentGraphs;
     }
 
+    ostringstream findTwins() {
+        ostringstream contractionSequence;        
+        set<int> vertices_set(vertices.begin(), vertices.end());
+        
+        set<set<int>> partitions; 
+        set<set<int>> updated_partitions; 
+        partitions.insert(vertices_set);
+
+        for (int v : vertices) {
+            ankerl::unordered_dense::set<int> neighbors = adjListBlack[v];
+            std::set<int> neighbors_set(neighbors.begin(), neighbors.end());
+            neighbors_set.insert(v);
+            for (set partition : partitions) {
+                std::set<int> difference;
+                std::set_difference(partition.begin(), partition.end(), neighbors_set.begin(), neighbors_set.end(), 
+                        std::inserter(difference, difference.end()));
+
+                std::set<int> intersection;
+                std::set_intersection(partition.begin(), partition.end(), neighbors_set.begin(), neighbors_set.end(), 
+                        std::inserter(intersection, intersection.end()));
+
+                if (!difference.empty()) updated_partitions.insert(difference);
+                if (!intersection.empty()) updated_partitions.insert(intersection);
+            }
+            partitions = updated_partitions;
+            updated_partitions.clear();
+        }
+        for (const set<int>& partition : partitions) {
+            if (partition.size() > 1) {
+                auto it = partition.begin();
+                int first = *it;
+                ++it;
+                while(it != partition.end()) {
+                    int next = *it;
+                    contractionSequence << first + 1 << " " << next + 1 << "\n";
+                    mergeVertices(first, next); 
+                    ++it;
+                }
+            }
+        }
+        return contractionSequence;
+    }
+ 
     ostringstream applyOneDegreeRule() {
         ostringstream contractionSequence;
 
         // Get all the one-degree vertices
         auto oneDegreeVertices = degreeToVertices[1];
-        if(oneDegreeVertices.empty()) return contractionSequence;
+        if(oneDegreeVertices.empty() || oneDegreeVertices.size() == 1) return contractionSequence;
 
         // Convert the set to a vector for easier random access and shuffling
         std::vector<int> oneDegreeList(oneDegreeVertices.begin(), oneDegreeVertices.end());
@@ -190,33 +234,24 @@ public:
         std::mt19937 g(rd());
         int count = 0;
 
-        while(oneDegreeList.size() > 1) {
-            auto start = high_resolution_clock::now();
-            // Shuffle the list to achieve randomness
-            std::shuffle(oneDegreeList.begin(), oneDegreeList.end(), g);
+        auto start = high_resolution_clock::now();
+        // Shuffle the list to achieve randomness
+        std::shuffle(oneDegreeList.begin(), oneDegreeList.end(), g);
 
-            // Create a new list for vertices that will be the result of the contractions
-            std::vector<int> newOneDegreeList;
-
-            // Contract vertices in pairs
-            for(size_t i = 0; i + 1 < oneDegreeList.size(); i += 2) {
-                contractionSequence << oneDegreeList[i] + 1 << " " << oneDegreeList[i+1] + 1 << "\n"; // Adjusting to 1-based index
-                mergeVertices(oneDegreeList[i], oneDegreeList[i+1]); // Assuming mergeVertices returns the resulting vertex
-                newOneDegreeList.push_back(oneDegreeList[i]);
-                count++;
-            }
-
-            // Set the new list as the current list for the next iteration
-            oneDegreeList = newOneDegreeList;
-            
-            auto stop = high_resolution_clock::now();
-            auto duration = duration_cast<milliseconds>(stop - start);
-            int seconds_part = duration.count() / 1000;
-            int milliseconds_part = duration.count() % 1000;
-            std::cout << "c (Merged " << count << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
-            << std::setfill('0') << std::setw(9) << milliseconds_part 
-            << " seconds" << std::endl;
+        // Contract vertices in pairs
+        for(size_t i = 0; i + 1 < oneDegreeList.size(); i += 2) {
+            contractionSequence << oneDegreeList[i] + 1 << " " << oneDegreeList[i+1] + 1 << "\n"; // Adjusting to 1-based index
+            mergeVertices(oneDegreeList[i], oneDegreeList[i+1]); // Assuming mergeVertices returns the resulting vertex
+            count++;
         }
+        
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<milliseconds>(stop - start);
+        int seconds_part = duration.count() / 1000;
+        int milliseconds_part = duration.count() % 1000;
+        std::cout << "c (Merged " << count << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+        << std::setfill('0') << std::setw(9) << milliseconds_part 
+        << " seconds" << std::endl;
 
         return contractionSequence;
     }
@@ -678,6 +713,7 @@ public:
         ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
         auto heuristic_start_time = high_resolution_clock::now();
         
+        int iterationCounter = 0;
         while (vertices.size() > 1) {
             auto start = high_resolution_clock::now();
 
@@ -715,6 +751,11 @@ public:
             contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
             mergeVertices(bestPair.first, bestPair.second);
 
+            if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
+                scores.clear();
+                iterationCounter = 0;
+            }
+
             auto elapsed_time = high_resolution_clock::now() - heuristic_start_time;
             if (elapsed_time > TIME_LIMIT) {
                 contractionSequence << generateRandomContractionSequence(vertices).str();
@@ -725,7 +766,7 @@ public:
             auto duration = duration_cast<milliseconds>(stop - start);
             int seconds_part = duration.count() / 1000;
             int milliseconds_part = duration.count() % 1000;
-            std::cout << "c (Left " << vertices.size() << ") Cycle in " << seconds_part << "." 
+            std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
         }
@@ -1112,7 +1153,9 @@ int main() {
         std::vector<int> partition2;
         ostringstream componentContraction;
 
-        cout << c.applyOneDegreeRule().str();
+        ostringstream twins = c.findTwins();
+        cout << twins.str();
+        // cout << c.applyOneDegreeRule().str();
 
         if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
         else componentContraction = c.findRedDegreeContraction();
