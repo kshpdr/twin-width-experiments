@@ -1153,8 +1153,8 @@ int main() {
         std::vector<int> partition2;
         ostringstream componentContraction;
 
-        ostringstream twins = c.findTwins();
-        cout << twins.str();
+        // ostringstream twins = c.findTwins();
+        // cout << twins.str();
         // cout << c.applyOneDegreeRule().str();
 
         if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
