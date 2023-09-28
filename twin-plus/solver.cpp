@@ -15,7 +15,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const auto TIME_LIMIT = std::chrono::seconds(300);
+const auto TIME_LIMIT = std::chrono::seconds(1);
 const int SCORE_RESET_THRESHOLD = 500000000;
 
 struct PairHash {
@@ -26,30 +26,36 @@ struct PairHash {
 
 ostringstream generateRandomContractionSequence(const ankerl::unordered_dense::set<int>& verticesSet) {
     ostringstream contractionSequence;
-
     std::random_device rd;
     std::mt19937 gen(rd());
 
     std::vector<int> vertices(verticesSet.begin(), verticesSet.end());
-
+    
     while (vertices.size() > 1) {
-        std::uniform_int_distribution<> dist(0, vertices.size() - 1);
-        int idx1 = dist(gen);
-        int idx2 = dist(gen);
-            
-        // Ensure the indices are distinct.
-        while (idx2 == idx1) {
-            idx2 = dist(gen);
+        // Shuffle the vertices at the start of each round
+        std::shuffle(vertices.begin(), vertices.end(), gen);
+
+        // Store the vertices after contraction in this round
+        std::vector<int> contractedVertices;
+        
+        // Iterate over vertices in pairs and contract each pair
+        for (size_t i = 0; i < vertices.size(); i += 2) {
+            if (i + 1 < vertices.size()) {
+                int vertex1 = vertices[i];
+                int vertex2 = vertices[i + 1];
+                contractionSequence << vertex1 + 1 << " " << vertex2 + 1 << "\n";
+                // Assume that vertex1 absorbs vertex2 upon contraction
+                contractedVertices.push_back(vertex1);
+            } else {
+                // If there's an odd number of vertices, the last one remains uncontracted in this round
+                contractedVertices.push_back(vertices[i]);
+            }
         }
 
-        int vertex1 = vertices[idx1];
-        int vertex2 = vertices[idx2];
-
-        contractionSequence << vertex1 + 1 << " " << vertex2 + 1 << "\n"; // Adjusting to 1-based index
-
-        // Emulating a merge by removing one of the vertices from the list
-        vertices.erase(vertices.begin() + idx2);
+        // Update the vertices vector for the next round
+        vertices = contractedVertices;
     }
+
     return contractionSequence;
 }
 
@@ -1146,41 +1152,41 @@ int main() {
     auto duration = duration_cast<seconds>(stop - start);
     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
 
-    std::vector<Graph> components = g.findConnectedComponents();
-    std::vector<int> remainingVertices;
-    for (Graph& c : components) {
-        std::vector<int> partition1;
-        std::vector<int> partition2;
-        ostringstream componentContraction;
+    // std::vector<Graph> components = g.findConnectedComponents();
+    // std::vector<int> remainingVertices;
+    // for (Graph& c : components) {
+    //     std::vector<int> partition1;
+    //     std::vector<int> partition2;
+    //     ostringstream componentContraction;
 
-        // ostringstream twins = c.findTwins();
-        // cout << twins.str();
-        // cout << c.applyOneDegreeRule().str();
+    //     // ostringstream twins = c.findTwins();
+    //     // cout << twins.str();
+    //     // cout << c.applyOneDegreeRule().str();
 
-        if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
-        else componentContraction = c.findRedDegreeContraction();
+    //     if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
+    //     else componentContraction = c.findRedDegreeContraction();
 
-        cout << componentContraction.str();
-        if (c.getVertices().size() == 1){
-            int remainingVertex = *c.getVertices().begin() + 1;
-            remainingVertices.push_back(remainingVertex);
-        }
-        else {
-            // Extract here the last remaining vertex from the findRedDegreeContraction's output and push it back to remaining vertices
-            string lastLine = getLastLine(componentContraction);
-            stringstream lastPair(lastLine);
-            int remainingVertex;
-            lastPair >> remainingVertex;
-            remainingVertices.push_back(remainingVertex);
-        }
-    }
+    //     cout << componentContraction.str();
+    //     if (c.getVertices().size() == 1){
+    //         int remainingVertex = *c.getVertices().begin() + 1;
+    //         remainingVertices.push_back(remainingVertex);
+    //     }
+    //     else {
+    //         // Extract here the last remaining vertex from the findRedDegreeContraction's output and push it back to remaining vertices
+    //         string lastLine = getLastLine(componentContraction);
+    //         stringstream lastPair(lastLine);
+    //         int remainingVertex;
+    //         lastPair >> remainingVertex;
+    //         remainingVertices.push_back(remainingVertex);
+    //     }
+    // }
 
-    int primaryVertex = remainingVertices[0];
-    for (size_t i = 1; i < remainingVertices.size(); ++i) {
-        cout << primaryVertex << " " << remainingVertices[i] << endl;
-    }
+    // int primaryVertex = remainingVertices[0];
+    // for (size_t i = 1; i < remainingVertices.size(); ++i) {
+    //     cout << primaryVertex << " " << remainingVertices[i] << endl;
+    // }
 
-    // cout << g.findRedDegreeContraction().str();
+    cout << g.findRedDegreeContraction().str();
 
     auto final_stop = high_resolution_clock::now();
     auto final_duration = duration_cast<seconds>(final_stop - start);
