@@ -15,7 +15,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const auto TIME_LIMIT = std::chrono::seconds(1);
+const auto TIME_LIMIT = std::chrono::seconds(300);
 const int SCORE_RESET_THRESHOLD = 500000000;
 
 struct PairHash {
@@ -225,8 +225,103 @@ public:
         }
         return contractionSequence;
     }
- 
-    ostringstream applyOneDegreeRule() {
+
+    // Randomly all with others if those are one degree at the time of initial graph state
+    ostringstream applyOneDegreeRuleInititalState() {
+        ostringstream contractionSequence;
+
+        // Get all the one-degree vertices
+        auto oneDegreeVertices = degreeToVertices[1];
+        if(oneDegreeVertices.empty()) return contractionSequence;
+
+        // Convert the set to a vector for easier random access
+        std::vector<int> oneDegreeList(oneDegreeVertices.begin(), oneDegreeVertices.end());
+
+        std::random_device rd;
+        std::mt19937 g(rd());
+        int count = 0;
+
+        auto start = high_resolution_clock::now();
+
+        // Choose a base vertex
+        std::uniform_int_distribution<> dist(0, oneDegreeList.size() - 1);
+        int baseIndex = dist(g);
+        int baseVertex = oneDegreeList[baseIndex];
+
+        // Contract other vertices into the base vertex
+        for(int vertex : oneDegreeList) {
+            if(vertex != baseVertex) {
+                contractionSequence << baseVertex + 1 << " " << vertex + 1 << "\n"; // Adjusting to 1-based index
+                mergeVertices(baseVertex, vertex); // Assuming mergeVertices modifies the graph appropriately
+                count++;
+            }
+        }
+        
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<milliseconds>(stop - start);
+        int seconds_part = duration.count() / 1000;
+        int milliseconds_part = duration.count() % 1000;
+        std::cout << "c (Merged " << count << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+        << std::setfill('0') << std::setw(9) << milliseconds_part 
+        << " seconds" << std::endl;
+
+        return contractionSequence;
+    }
+
+    ostringstream applyOneDegreeRuleThreshold(int degreeThreshold) {
+        ostringstream contractionSequence;
+
+        auto oneDegreeVertices = degreeToVertices[1];
+        if(oneDegreeVertices.empty() || oneDegreeVertices.size() == 1) return contractionSequence;
+
+        std::vector<int> filteredOneDegreeList;
+
+        int totalDegreeOfNeighbors = 0;
+        for (int vertex : oneDegreeVertices) {
+            auto neighbors = adjListBlack[vertex];
+            for (int neighbor : neighbors) {
+                totalDegreeOfNeighbors = totalDegreeOfNeighbors + adjListBlack[neighbor].size();
+            }
+        }
+        int threshold = (totalDegreeOfNeighbors / oneDegreeVertices.size());
+
+        for (int vertex : oneDegreeVertices) {
+            auto neighbors = adjListBlack[vertex];  // Assuming black edges define the graph structure
+            for (int neighbor : neighbors) {
+                if (adjListBlack[neighbor].size() + adjListRed[neighbor].size() <= threshold) {
+                    filteredOneDegreeList.push_back(vertex);
+                    break;
+                }
+            }
+        }
+
+        if(filteredOneDegreeList.empty() || filteredOneDegreeList.size() == 1) return contractionSequence;
+
+        std::random_device rd;
+        std::mt19937 g(rd());
+        int count = 0;
+
+        auto start = high_resolution_clock::now();
+        std::shuffle(filteredOneDegreeList.begin(), filteredOneDegreeList.end(), g);
+
+        for(size_t i = 0; i + 1 < filteredOneDegreeList.size(); i += 2) {
+            contractionSequence << filteredOneDegreeList[i] + 1 << " " << filteredOneDegreeList[i+1] + 1 << "\n";
+            mergeVertices(filteredOneDegreeList[i], filteredOneDegreeList[i+1]);
+            count++;
+        }
+
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<milliseconds>(stop - start);
+        int seconds_part = duration.count() / 1000;
+        int milliseconds_part = duration.count() % 1000;
+        std::cout << "c (Merged " << count << ", tww: " << width << ") Cycle in " << seconds_part << "." 
+        << std::setfill('0') << std::setw(9) << milliseconds_part 
+        << " seconds" << std::endl;
+
+        return contractionSequence;
+    }
+
+    ostringstream applyOneDegreeRuleContractHalf() {
         ostringstream contractionSequence;
 
         // Get all the one-degree vertices
@@ -1185,7 +1280,7 @@ int main() {
     // for (size_t i = 1; i < remainingVertices.size(); ++i) {
     //     cout << primaryVertex << " " << remainingVertices[i] << endl;
     // }
-
+    cout << g.applyOneDegreeRuleThreshold(0).str();
     cout << g.findRedDegreeContraction().str();
 
     auto final_stop = high_resolution_clock::now();
