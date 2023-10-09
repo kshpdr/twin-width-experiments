@@ -268,6 +268,109 @@ public:
         return contractionSequence;
     }
 
+    ostringstream applyOneDegreeRuleInititalStateWithoutTwins() {
+        ostringstream contractionSequence;
+
+        // Get all the one-degree vertices
+        auto oneDegreeVertices = degreeToVertices[1];
+        if(oneDegreeVertices.empty()) return contractionSequence;
+
+        // Convert the set to a vector for easier random access
+        std::vector<int> oneDegreeList(oneDegreeVertices.begin(), oneDegreeVertices.end());
+
+        std::random_device rd;
+        std::mt19937 g(rd());
+        int count = 0;
+
+        for (size_t i = 0; i < oneDegreeList.size() - 1; ++i) {
+            int n1;
+            if (adjListBlack[oneDegreeList[i]].size() == 1) n1 = *begin(adjListBlack[oneDegreeList[i]]);
+            else if (adjListRed[oneDegreeList[i]].size() == 1) n1 = *begin(adjListRed[oneDegreeList[i]]);
+            for (size_t j = i+1; j < oneDegreeList.size(); ++j) {
+                int n2;
+                if (adjListBlack[oneDegreeList[j]].size() == 1) n2 = *begin(adjListBlack[oneDegreeList[j]]);
+                else if (adjListRed[oneDegreeList[j]].size() == 1) n2 = *begin(adjListRed[oneDegreeList[j]]);
+                if (n1 == n2) {
+                    contractionSequence << oneDegreeList[i] + 1 << " " << oneDegreeList[j] + 1 << "\n"; // Adjusting to 1-based index
+                    mergeVertices(oneDegreeList[i], oneDegreeList[j]); // Assuming mergeVertices returns the resulting vertex
+                    oneDegreeList.erase(oneDegreeList.begin() + j);
+                    cout << "c One degree twins eliminated:" << oneDegreeList[i] + 1 << " " << oneDegreeList[j] + 1 << "\n";
+                }
+            }
+        }
+
+        auto start = high_resolution_clock::now();
+
+        // Choose a base vertex
+        std::uniform_int_distribution<> dist(0, oneDegreeList.size() - 1);
+        int baseIndex = dist(g);
+        int baseVertex = oneDegreeList[baseIndex];
+
+        // Contract other vertices into the base vertex
+        for(int vertex : oneDegreeList) {
+            if(vertex != baseVertex) {
+                contractionSequence << baseVertex + 1 << " " << vertex + 1 << "\n"; // Adjusting to 1-based index
+                mergeVertices(baseVertex, vertex); // Assuming mergeVertices modifies the graph appropriately
+                count++;
+            }
+        }
+        
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<milliseconds>(stop - start);
+        int seconds_part = duration.count() / 1000;
+        int milliseconds_part = duration.count() % 1000;
+        std::cout << "c (Merged " << count << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+        << std::setfill('0') << std::setw(9) << milliseconds_part 
+        << " seconds" << std::endl;
+
+        return contractionSequence;
+    }
+
+    ostringstream removeOneDegreeTwins() {
+        ostringstream contractionSequence;
+
+        // Get all the one-degree vertices
+        auto oneDegreeVertices = degreeToVertices[1];
+        if(oneDegreeVertices.empty()) return contractionSequence;
+
+        // Convert the set to a vector for easier random access
+        std::vector<int> oneDegreeList(oneDegreeVertices.begin(), oneDegreeVertices.end());
+
+        std::random_device rd;
+        std::mt19937 g(rd());
+        int count = 0;
+
+        for (size_t i = 0; i < oneDegreeList.size() - 1; ++i) {
+            int n1;
+            if (adjListBlack[oneDegreeList[i]].size() == 1) n1 = *begin(adjListBlack[oneDegreeList[i]]);
+            else if (adjListRed[oneDegreeList[i]].size() == 1) n1 = *begin(adjListRed[oneDegreeList[i]]);
+            for (size_t j = i+1; j < oneDegreeList.size(); ++j) {
+                int n2;
+                if (adjListBlack[oneDegreeList[j]].size() == 1) n2 = *begin(adjListBlack[oneDegreeList[j]]);
+                else if (adjListRed[oneDegreeList[j]].size() == 1) n2 = *begin(adjListRed[oneDegreeList[j]]);
+                if (n1 == n2) {
+                    contractionSequence << oneDegreeList[i] + 1 << " " << oneDegreeList[j] + 1 << "\n"; // Adjusting to 1-based index
+                    mergeVertices(oneDegreeList[i], oneDegreeList[j]); // Assuming mergeVertices returns the resulting vertex
+                    oneDegreeList.erase(oneDegreeList.begin() + j);
+                    cout << "c One degree twins eliminated:" << oneDegreeList[i] + 1 << " " << oneDegreeList[j] + 1 << "\n";
+                }
+            }
+        }
+
+        auto start = high_resolution_clock::now();
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<milliseconds>(stop - start);
+        int seconds_part = duration.count() / 1000;
+        int milliseconds_part = duration.count() % 1000;
+        std::cout << "c (Merged " << count << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+        << std::setfill('0') << std::setw(9) << milliseconds_part 
+        << " seconds" << std::endl;
+
+        return contractionSequence;
+    }
+
+
+
     ostringstream applyOneDegreeRuleThreshold(int degreeThreshold) {
         ostringstream contractionSequence;
 
@@ -276,8 +379,26 @@ public:
 
         std::vector<int> filteredOneDegreeList;
 
+        std::vector<int> oneDegreeList(oneDegreeVertices.begin(), oneDegreeVertices.end());
+        for (size_t i = 0; i < oneDegreeList.size() - 1; ++i) {
+            int n1;
+            if (adjListBlack[oneDegreeList[i]].size() == 1) n1 = *begin(adjListBlack[oneDegreeList[i]]);
+            else if (adjListRed[oneDegreeList[i]].size() == 1) n1 = *begin(adjListRed[oneDegreeList[i]]);
+            for (size_t j = i+1; j < oneDegreeList.size(); ++j) {
+                int n2;
+                if (adjListBlack[oneDegreeList[j]].size() == 1) n2 = *begin(adjListBlack[oneDegreeList[j]]);
+                else if (adjListRed[oneDegreeList[j]].size() == 1) n2 = *begin(adjListRed[oneDegreeList[j]]);
+                if (n1 == n2) {
+                    contractionSequence << oneDegreeList[i] + 1 << " " << oneDegreeList[j] + 1 << "\n"; // Adjusting to 1-based index
+                    mergeVertices(oneDegreeList[i], oneDegreeList[j]); // Assuming mergeVertices returns the resulting vertex
+                    oneDegreeList.erase(oneDegreeList.begin() + j);
+                    cout << "c One degree twins eliminated:" << oneDegreeList[i] + 1 << " " << oneDegreeList[j] + 1 << "\n";
+                }
+            }
+        }
+
         int totalDegreeOfNeighbors = 0;
-        for (int vertex : oneDegreeVertices) {
+        for (int vertex : oneDegreeList) {
             auto neighbors = adjListBlack[vertex];
             for (int neighbor : neighbors) {
                 totalDegreeOfNeighbors = totalDegreeOfNeighbors + adjListBlack[neighbor].size();
@@ -286,7 +407,7 @@ public:
         // int threshold = (totalDegreeOfNeighbors / oneDegreeVertices.size());
         int threshold = sqrt(totalDegreeOfNeighbors);
 
-        for (int vertex : oneDegreeVertices) {
+        for (int vertex : oneDegreeList) {
             auto neighbors = adjListBlack[vertex];  // Assuming black edges define the graph structure
             for (int neighbor : neighbors) {
                 if (adjListBlack[neighbor].size() + adjListRed[neighbor].size() <= threshold) {
@@ -1335,7 +1456,7 @@ int main() {
     //     cout << primaryVertex << " " << remainingVertices[i] << endl;
     // }
 
-    cout << g.applyOneDegreeRuleContractHalfWithoutTwins().str();
+    // cout << g.applyOneDegreeRuleContractHalfWithoutTwins().str();
     cout << g.findRedDegreeContraction().str();
 
     auto final_stop = high_resolution_clock::now();
