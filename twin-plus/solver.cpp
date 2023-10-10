@@ -11,6 +11,7 @@
 #include <iomanip> 
 #include <unordered_dense.h>
 #include <queue>
+#include "BoostGraph.hpp"
 
 using namespace std;
 using namespace std::chrono;
@@ -156,6 +157,45 @@ public:
                 dfs(neighbor, visited, component);
             }
         }
+    }
+    static Graph constructFromEdges(const std::set<std::pair<int, int>>& edges) {
+        Graph g;
+        for (const auto& edge : edges) {
+            int u = edge.first, v = edge.second;
+            g.addVertex(u);
+            g.addVertex(v);
+            g.addEdge(u, v, "black");
+        }
+        return g;
+    }
+
+    bool isBipartiteBoost(std::vector<int>& partition1, std::vector<int>& partition2) {
+        BoostGraph boostGraph(vertices.size());
+        for (const auto& entry : adjListBlack) {
+            int u = entry.first;
+            for (int v : entry.second) {
+                boostGraph.addEdge(u, v);
+            }
+        }
+
+        return boostGraph.isBipartite(partition1, partition2);
+    }
+
+    std::vector<Graph> findConnectedComponentsBoost() {
+        BoostGraph boostGraph(vertices.size());
+        for (const auto& entry : adjListBlack) {
+            int u = entry.first;
+            for (int v : entry.second) {
+                boostGraph.addEdge(u, v);
+            }
+        }
+
+        std::vector<std::set<std::pair<int, int>>> components = boostGraph.getConnectedComponents();
+        std::vector<Graph> result;
+        for (const auto& edges : components) {
+            result.push_back(constructFromEdges(edges));
+        }
+        return result;
     }
 
     std::vector<Graph> findConnectedComponents() {
@@ -1067,8 +1107,8 @@ public:
             auto start = high_resolution_clock::now();
 
             // Get the top vertices with the lowest red degree from both partitions.
-            vector<int> candidates1 = getTopNVerticesWithLowestRedDegreeFromPartition(partition1, 10);
-            vector<int> candidates2 = getTopNVerticesWithLowestRedDegreeFromPartition(partition2, 10);
+            vector<int> candidates1 = getTopNVerticesWithLowestRedDegreeFromPartition(partition1, 5);
+            vector<int> candidates2 = getTopNVerticesWithLowestRedDegreeFromPartition(partition2, 15);
 
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
@@ -1132,7 +1172,7 @@ public:
             auto duration = duration_cast<milliseconds>(stop - start);
             int seconds_part = duration.count() / 1000;
             int milliseconds_part = duration.count() % 1000;
-            std::cout << "c (Left " << vertices.size() << ") Cycle in " << seconds_part << "." 
+            std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
         }
@@ -1369,6 +1409,7 @@ string getLastLine(ostringstream& oss) {
 
 int main() {
     Graph g;
+    BoostGraph boostGraph;
     string line;
     int numVertices, numEdges;
     set<pair<int, int>> readEdges;
@@ -1392,6 +1433,7 @@ int main() {
             numVertices = stoi(tokens[2]);
             numEdges = stoi(tokens[3]);
             g.addVertices(numVertices);
+            boostGraph = BoostGraph(numVertices);
 
             double density = (2.0 * numEdges) / (numVertices * (numVertices - 1));
             if (density > 0.5) {
@@ -1405,6 +1447,7 @@ int main() {
             int u = stoi(tokens[0]);
             int v = stoi(tokens[1]);
             g.addEdge(u - 1, v - 1, "black");
+            boostGraph.addEdge(u - 1, v - 1);
         }
     }
 
@@ -1413,6 +1456,7 @@ int main() {
             for (int j = i + 1; j < numVertices; j++) {
                 if (readEdges.find({i, j}) == readEdges.end()) {
                     g.addEdge(i, j, "black");
+                    boostGraph.addEdge(i, j);
                 }
             }
         }
@@ -1422,42 +1466,45 @@ int main() {
     auto duration = duration_cast<seconds>(stop - start);
     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
 
-    // std::vector<Graph> components = g.findConnectedComponents();
-    // std::vector<int> remainingVertices;
-    // for (Graph& c : components) {
-    //     std::vector<int> partition1;
-    //     std::vector<int> partition2;
-    //     ostringstream componentContraction;
+    std::vector<Graph> components = g.findConnectedComponents();
+    std::vector<int> remainingVertices;
+    for (Graph& c : components) {
+        std::vector<int> partition1;
+        std::vector<int> partition2;
+        ostringstream componentContraction;
 
-    //     // ostringstream twins = c.findTwins();
-    //     // cout << twins.str();
-    //     // cout << c.applyOneDegreeRule().str();
+        // ostringstream twins = c.findTwins();
+        // cout << twins.str();
+        // cout << c.applyOneDegreeRule().str();
 
-    //     if (c.isBipartite(partition1, partition2)) componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
-    //     else componentContraction = c.findRedDegreeContraction();
+        if (c.isBipartiteBoost(partition1, partition2)) {
+            componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
+            cout << "c ITS BIPARTITE" << endl;
+        }
+        else componentContraction = c.findRedDegreeContraction();
 
-    //     cout << componentContraction.str();
-    //     if (c.getVertices().size() == 1){
-    //         int remainingVertex = *c.getVertices().begin() + 1;
-    //         remainingVertices.push_back(remainingVertex);
-    //     }
-    //     else {
-    //         // Extract here the last remaining vertex from the findRedDegreeContraction's output and push it back to remaining vertices
-    //         string lastLine = getLastLine(componentContraction);
-    //         stringstream lastPair(lastLine);
-    //         int remainingVertex;
-    //         lastPair >> remainingVertex;
-    //         remainingVertices.push_back(remainingVertex);
-    //     }
-    // }
+        // cout << c.findRedDegreeContraction().str();
+        cout << componentContraction.str();
+        if (c.getVertices().size() == 1){
+            int remainingVertex = *c.getVertices().begin() + 1;
+            remainingVertices.push_back(remainingVertex);
+        }
+        else {
+            // Extract here the last remaining vertex from the findRedDegreeContraction's output and push it back to remaining vertices
+            string lastLine = getLastLine(componentContraction);
+            stringstream lastPair(lastLine);
+            int remainingVertex;
+            lastPair >> remainingVertex;
+            remainingVertices.push_back(remainingVertex);
+        }
+    }
 
-    // int primaryVertex = remainingVertices[0];
-    // for (size_t i = 1; i < remainingVertices.size(); ++i) {
-    //     cout << primaryVertex << " " << remainingVertices[i] << endl;
-    // }
+    int primaryVertex = remainingVertices[0];
+    for (size_t i = 1; i < remainingVertices.size(); ++i) {
+        cout << primaryVertex << " " << remainingVertices[i] << endl;
+    }
 
-    // cout << g.applyOneDegreeRuleContractHalfWithoutTwins().str();
-    cout << g.findRedDegreeContraction().str();
+    // cout << g.findRedDegreeContraction().str();
 
     auto final_stop = high_resolution_clock::now();
     auto final_duration = duration_cast<seconds>(final_stop - start);
