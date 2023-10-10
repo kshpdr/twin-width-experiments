@@ -572,6 +572,46 @@ public:
         return contractionSequence;
     }
 
+    vector<int> getNeighborhood(int vertex) {
+        vector<int> neighbors;
+        neighbors.insert(neighbors.end(), adjListBlack[vertex].begin(), adjListBlack[vertex].end());
+        neighbors.insert(neighbors.end(), adjListRed[vertex].begin(), adjListRed[vertex].end());
+        return neighbors;
+    }
+
+    vector<int> getRandomSecondNeighbors(int vertex, vector<int> firstNeighbors) {
+        vector<int> secondRandomNeighbors;
+        for (int vertex : firstNeighbors) {
+            vector<int> neighbors = getNeighborhood(vertex);
+            secondRandomNeighbors.push_back(getRandomNeighbors(vertex, neighbors, 1).front());
+        }
+        return secondRandomNeighbors;
+    }
+
+    vector<int> getRandomNeighbors(int vertex, vector<int> neighbors, int neighborsNumber) {
+        vector<int> randomNeighbors;
+        std::sample(
+            neighbors.begin(),
+            neighbors.end(),
+            std::back_inserter(randomNeighbors),
+            neighborsNumber,
+            std::mt19937{std::random_device{}()}
+        );
+        randomNeighbors.erase(std::remove(randomNeighbors.begin(), randomNeighbors.end(), vertex), randomNeighbors.end());
+        return randomNeighbors;
+    } 
+
+    set<int> getRandomWalkVertices(int vertex, int numberVertices) {
+        set<int> randomWalkVertices;
+        for (int i = 0; i < numberVertices; ++i) {
+            int distance = ((double) rand() / (RAND_MAX)) + 1;
+            
+            int randomVertex = getRandomNeighbors(vertex, getNeighborhood(vertex), 1).front();
+            if (distance == 2 && adjListBlack[randomVertex].size() + adjListRed[randomVertex].size() != 0) randomVertex = getRandomNeighbors(randomVertex, getNeighborhood(randomVertex), 1).front();
+            randomWalkVertices.insert(randomVertex);
+        }
+        return randomWalkVertices;
+    }
 
     ankerl::unordered_dense::set<int> getTwoNeighborhood(int vertex) {
         ankerl::unordered_dense::set<int> firstNeighbors;
@@ -595,6 +635,19 @@ public:
         secondNeighbors.erase(vertex);
 
         return secondNeighbors;
+    }
+
+    bool areInTwoNeighborhood(int v1, int v2) {
+        ankerl::unordered_dense::set<int> n1 = adjListBlack[v1];
+        n1.insert(adjListRed[v1].begin(), adjListRed[v1].end());
+        ankerl::unordered_dense::set<int> n2 = adjListBlack[v2];
+        n2.insert(adjListRed[v2].begin(), adjListRed[v2].end());
+        bool areNeighbors = n1.contains(v2);
+        ankerl::unordered_dense::set<int> commonNeighbors;
+        std::set_intersection(n1.begin(), n1.begin(),
+                            n2.begin(), n2.end(),
+                            std::inserter(commonNeighbors, commonNeighbors.end()));
+        return areNeighbors || !commonNeighbors.empty();
     }
 
     void removeVertex(int vertex) {        
@@ -1065,6 +1118,85 @@ public:
             }
 
             contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c SHIT" << endl;
+            else cout << "c FUCK" << endl;
+            mergeVertices(bestPair.first, bestPair.second);
+
+            if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
+                scores.clear();
+                iterationCounter = 0;
+            }
+
+            auto elapsed_time = high_resolution_clock::now() - heuristic_start_time;
+            if (elapsed_time > TIME_LIMIT) {
+                contractionSequence << generateRandomContractionSequence(vertices).str();
+                break;
+            }
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+        return contractionSequence;
+    }
+
+    ostringstream findRedDegreeContractionRandomWalk(){ 
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                int v1 = lowestDegreeVertices[i];
+
+                auto start1 = high_resolution_clock::now();
+
+                set<int> randomWalkVertices = getRandomWalkVertices(v1, 20);  
+
+                auto stop1 = high_resolution_clock::now();
+                auto duration1 = duration_cast<milliseconds>(stop1 - start1);
+                int seconds_part1 = duration1.count() / 1000;
+                int milliseconds_part1 = duration1.count() % 1000;
+                std::cout << "c Random walk in " << seconds_part1 << "." 
+                << std::setfill('0') << std::setw(9) << milliseconds_part1 
+                << " seconds" << std::endl;
+              
+                for (int v2 : randomWalkVertices) {
+                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+                    
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
             mergeVertices(bestPair.first, bestPair.second);
 
             if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
@@ -1477,14 +1609,14 @@ int main() {
         // cout << twins.str();
         // cout << c.applyOneDegreeRule().str();
 
-        if (c.isBipartiteBoost(partition1, partition2)) {
-            componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
-            cout << "c ITS BIPARTITE" << endl;
-        }
-        else componentContraction = c.findRedDegreeContraction();
+        // if (c.isBipartiteBoost(partition1, partition2)) {
+        //     componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
+        //     cout << "c ITS BIPARTITE" << endl;
+        // }
+        // else componentContraction = c.findRedDegreeContraction();
+        // cout << componentContraction.str();
 
-        // cout << c.findRedDegreeContraction().str();
-        cout << componentContraction.str();
+        cout << c.findRedDegreeContraction().str();
         if (c.getVertices().size() == 1){
             int remainingVertex = *c.getVertices().begin() + 1;
             remainingVertices.push_back(remainingVertex);
