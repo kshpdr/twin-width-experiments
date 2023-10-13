@@ -58,6 +58,15 @@ public:
         redDegreeToVertices.insert(redDegreeToVertices.begin(), vertices);
     }
 
+    void addVertices(int n, vector<int> ids){
+        adjListBlack.resize(n);
+        adjListRed.resize(n);
+
+        vertices = ids;
+        redDegreeToVertices.insert(redDegreeToVertices.begin(), ids);
+    }
+
+
     void addEdge(int v1, int v2, const string& color = "black") {
         if (color == "black") {
             adjListBlack[v1].push_back(v2);
@@ -107,6 +116,65 @@ public:
     int getWidth() const {
         return width;
     }
+
+    vector<int> getVertices() {
+        return vertices;
+    }
+
+    std::vector<Graph> findConnectedComponents() {
+        vector<int> visited;
+        std::vector<Graph> componentGraphs;
+        int counter = 1;
+
+        for (int vertex : vertices) {
+            auto start = high_resolution_clock::now();
+            if (std::find(visited.begin(), visited.end(), vertex) == visited.end()) {
+                std::vector<int> component;
+                dfs(vertex, visited, component);
+                Graph subGraph;
+                subGraph.addVertices(vertices.size(), component);
+                for (int v : component) {
+                    for (int neighbor : adjListBlack[v]) {
+                        if (v < neighbor) { 
+                            subGraph.addEdge(v, neighbor, "black");
+                        }
+                    }
+                }
+
+                componentGraphs.push_back(subGraph);
+            }
+            // auto stop = high_resolution_clock::now();
+            // auto duration = duration_cast<milliseconds>(stop - start);
+            // int seconds_part = duration.count() / 1000;
+            // int milliseconds_part = duration.count() % 1000;
+            // std::cout << "c Cycle " << counter <<  " in " << seconds_part << "." 
+            // << std::setfill('0') << std::setw(9) << milliseconds_part 
+            // << " seconds" << std::endl;
+            // counter++;
+        }
+
+        return componentGraphs;
+    }
+
+    void dfs(int v, vector<int>& visited, std::vector<int>& component) {
+        visited.push_back(v);
+        component.push_back(v);
+        
+        // For black edges
+        for (int neighbor : adjListBlack[v]) {
+            if (std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
+                dfs(neighbor, visited, component);
+            }
+        }
+
+        // For red edges
+        for (int neighbor : adjListRed[v]) {
+            if (std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
+                dfs(neighbor, visited, component);
+            }
+        }
+    }
+
 
     void updateVertexRedDegree(int vertex, int diff) {
         int oldDegree = adjListRed[vertex].size();
@@ -376,7 +444,45 @@ int main() {
     auto duration = duration_cast<seconds>(stop - start);
     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
 
-    cout << g.findRedDegreeContraction().str();
+    std::vector<Graph> components = g.findConnectedComponents();
+    std::vector<int> remainingVertices;
+    for (Graph& c : components) {
+        std::vector<int> partition1;
+        std::vector<int> partition2;
+        ostringstream componentContraction;
+
+        // ostringstream twins = c.findTwins();
+        // cout << twins.str();
+        // cout << c.applyOneDegreeRule().str();
+
+        // if (c.isBipartiteBoost(partition1, partition2)) {
+        //     componentContraction = c.findRedDegreeContractionPartitioned(partition1, partition2);
+        //     cout << "c ITS BIPARTITE" << endl;
+        // }
+        // else componentContraction = c.findRedDegreeContraction();
+        // cout << componentContraction.str();
+
+        cout << c.findRedDegreeContraction().str();
+        if (c.getVertices().size() == 1){
+            int remainingVertex = *c.getVertices().begin() + 1;
+            remainingVertices.push_back(remainingVertex);
+        }
+        else {
+            // Extract here the last remaining vertex from the findRedDegreeContraction's output and push it back to remaining vertices
+            string lastLine = getLastLine(componentContraction);
+            stringstream lastPair(lastLine);
+            int remainingVertex;
+            lastPair >> remainingVertex;
+            remainingVertices.push_back(remainingVertex);
+        }
+    }
+
+    int primaryVertex = remainingVertices[0];
+    for (size_t i = 1; i < remainingVertices.size(); ++i) {
+        cout << primaryVertex << " " << remainingVertices[i] << endl;
+    }
+
+    // cout << g.findRedDegreeContraction().str();
 
     auto final_stop = high_resolution_clock::now();
     auto final_duration = duration_cast<seconds>(final_stop - start);
