@@ -17,7 +17,7 @@ using namespace std;
 using namespace std::chrono;
 
 const auto TIME_LIMIT = std::chrono::seconds(300);
-const int SCORE_RESET_THRESHOLD = 500000000;
+const int SCORE_RESET_THRESHOLD = 50000000;
 
 struct PairHash {
     size_t operator()(const pair<int, int>& p) const {
@@ -601,15 +601,50 @@ public:
         return randomNeighbors;
     } 
 
+    int getRandomDistance() {
+        static std::random_device rd; 
+        static std::mt19937 gen(rd()); 
+        std::uniform_int_distribution<> distrib(1, 2);
+
+        return distrib(gen);
+    }
+
+    int getRandomNeighbor(int vertex) {
+        if (adjListBlack[vertex].empty() && !adjListRed[vertex].empty()) return getRandomSetElement(adjListRed[vertex]);
+        else if (!adjListBlack[vertex].empty() && adjListRed[vertex].empty()) return getRandomSetElement(adjListBlack[vertex]);
+        else {
+            int useRed = getRandomDistance();
+            if (useRed == 1) return getRandomSetElement(adjListRed[vertex]);
+            else return getRandomSetElement(adjListBlack[vertex]);
+        }
+    }
+
+    int getRandomSetElement(ankerl::unordered_dense::set<int>& s) {
+        if (s.empty()) {
+            throw std::runtime_error("Set is empty");
+        }
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dist(0, s.size() - 1);
+
+        auto it = s.begin();
+        std::advance(it, dist(gen));
+        return *it;
+    }
+
     set<int> getRandomWalkVertices(int vertex, int numberVertices) {
         set<int> randomWalkVertices;
         for (int i = 0; i < numberVertices; ++i) {
-            int distance = ((double) rand() / (RAND_MAX)) + 1;
+            int distance = getRandomDistance();
+            // int distance = 1;
+            cout << "c dist: " << distance << endl;
             
-            int randomVertex = getRandomNeighbors(vertex, getNeighborhood(vertex), 1).front();
-            if (distance == 2 && adjListBlack[randomVertex].size() + adjListRed[randomVertex].size() != 0) randomVertex = getRandomNeighbors(randomVertex, getNeighborhood(randomVertex), 1).front();
+            int randomVertex = getRandomNeighbor(vertex);
+            if (distance == 2 && adjListBlack[randomVertex].size() + adjListRed[randomVertex].size() != 0) randomVertex = getRandomNeighbor(randomVertex);
             randomWalkVertices.insert(randomVertex);
         }
+        randomWalkVertices.erase(vertex);
         return randomWalkVertices;
     }
 
@@ -644,9 +679,9 @@ public:
         n2.insert(adjListRed[v2].begin(), adjListRed[v2].end());
         bool areNeighbors = n1.contains(v2);
         ankerl::unordered_dense::set<int> commonNeighbors;
-        std::set_intersection(n1.begin(), n1.begin(),
+        std::set_intersection(n1.begin(), n1.end(),
                             n2.begin(), n2.end(),
-                            std::inserter(commonNeighbors, commonNeighbors.end()));
+                            std::inserter(commonNeighbors, commonNeighbors.begin()));
         return areNeighbors || !commonNeighbors.empty();
     }
 
@@ -1118,8 +1153,8 @@ public:
             }
 
             contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
-            if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c SHIT" << endl;
-            else cout << "c FUCK" << endl;
+            if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c Not neighbors, score: " << bestScore << endl;
+            else cout << "c Neighbors, score: " << bestScore << endl;
             mergeVertices(bestPair.first, bestPair.second);
 
             if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
@@ -1160,18 +1195,7 @@ public:
 
             for (int i = 0; i < lowestDegreeVertices.size(); i++) {
                 int v1 = lowestDegreeVertices[i];
-
-                auto start1 = high_resolution_clock::now();
-
-                set<int> randomWalkVertices = getRandomWalkVertices(v1, 20);  
-
-                auto stop1 = high_resolution_clock::now();
-                auto duration1 = duration_cast<milliseconds>(stop1 - start1);
-                int seconds_part1 = duration1.count() / 1000;
-                int milliseconds_part1 = duration1.count() % 1000;
-                std::cout << "c Random walk in " << seconds_part1 << "." 
-                << std::setfill('0') << std::setw(9) << milliseconds_part1 
-                << " seconds" << std::endl;
+                set<int> randomWalkVertices = getRandomWalkVertices(v1, 10);  
               
                 for (int v2 : randomWalkVertices) {
                     // if (!getTwoNeighborhood(v1).contains(v2)) continue;
@@ -1197,6 +1221,10 @@ public:
             }
 
             contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+
+            if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c Not neighbors, score: " << bestScore << endl;
+            else cout << "c Neighbors, score: " << bestScore << endl;
+
             mergeVertices(bestPair.first, bestPair.second);
 
             if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
@@ -1616,7 +1644,7 @@ int main() {
         // else componentContraction = c.findRedDegreeContraction();
         // cout << componentContraction.str();
 
-        cout << c.findRedDegreeContraction().str();
+        cout << c.findRedDegreeContractionRandomWalk().str();
         if (c.getVertices().size() == 1){
             int remainingVertex = *c.getVertices().begin() + 1;
             remainingVertices.push_back(remainingVertex);
