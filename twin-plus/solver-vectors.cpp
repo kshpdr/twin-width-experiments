@@ -308,6 +308,99 @@ public:
         return symmetric_difference.size();
     }
 
+    int getRandomDistance() {
+        static std::random_device rd; 
+        static std::mt19937 gen(rd()); 
+        std::uniform_int_distribution<> distrib(1, 2);
+
+        return distrib(gen);
+    }
+
+    int getRandomNeighbor(int vertex) {
+        vector<int> allNeighbors;
+        allNeighbors.insert(allNeighbors.end(), adjListBlack[vertex].begin(), adjListBlack[vertex].end());
+        allNeighbors.insert(allNeighbors.end(), adjListRed[vertex].begin(), adjListRed[vertex].end());
+
+        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+        std::default_random_engine engine(seed);
+
+        std::shuffle(allNeighbors.begin(), allNeighbors.end(), engine);
+        return allNeighbors[0];
+    }
+
+    set<int> getRandomWalkVertices(int vertex, int numberVertices) {
+        set<int> randomWalkVertices;
+        for (int i = 0; i < numberVertices; ++i) {
+            int distance = getRandomDistance();            
+            int randomVertex = getRandomNeighbor(vertex);
+            if (distance == 2 && adjListBlack[randomVertex].size() + adjListRed[randomVertex].size() != 0) randomVertex = getRandomNeighbor(randomVertex);
+            randomWalkVertices.insert(randomVertex);
+        }
+        randomWalkVertices.erase(vertex);
+        return randomWalkVertices;
+    }
+
+
+    ostringstream findRedDegreeContractionRandomWalk(){ 
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                int v1 = lowestDegreeVertices[i];
+                set<int> randomWalkVertices = getRandomWalkVertices(v1, 10);  
+              
+                for (int v2 : randomWalkVertices) {
+                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+                    
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+
+            // if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c Not neighbors, score: " << bestScore << endl;
+            // else cout << "c Neighbors, score: " << bestScore << endl;
+
+            mergeVertices(bestPair.first, bestPair.second);
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+        return contractionSequence;
+    }
+
+
 
     ostringstream findRedDegreeContraction(){ 
         ostringstream contractionSequence;
@@ -462,7 +555,7 @@ int main() {
         // else componentContraction = c.findRedDegreeContraction();
         // cout << componentContraction.str();
 
-        cout << c.findRedDegreeContraction().str();
+        cout << c.findRedDegreeContractionRandomWalk().str();
         if (c.getVertices().size() == 1){
             int remainingVertex = *c.getVertices().begin() + 1;
             remainingVertices.push_back(remainingVertex);
