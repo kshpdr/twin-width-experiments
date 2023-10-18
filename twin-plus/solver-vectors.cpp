@@ -30,6 +30,7 @@ private:
     vector<vector<int>> adjListBlack;  // For black edges
     vector<vector<int>> adjListRed;    // For red edges
     vector<vector<int>> redDegreeToVertices; // vertex id saved
+    vector<vector<int>> degreeToVertices;
     int width = 0;
 
 public:
@@ -40,12 +41,14 @@ public:
         this->adjListBlack = g.adjListBlack;
         this->adjListRed = g.adjListRed;
         this->redDegreeToVertices = g.redDegreeToVertices;
+        this->degreeToVertices = g.degreeToVertices;
         this->width = g.width;
     }
 
     void addVertex(int v){
         vertices.push_back(v);
         updateVertexRedDegree(v, 0);
+        updateVertexDegree(v, 0);
     }
         
     // Adds n vertices to the graph numbered from 0 to n-1
@@ -56,6 +59,7 @@ public:
 
         std::iota(vertices.begin(), vertices.end(), 0); // populate vertices with 0...n-1
         redDegreeToVertices.insert(redDegreeToVertices.begin(), vertices);
+        degreeToVertices.insert(degreeToVertices.begin(), vertices);
     }
 
     void addVertices(int n, vector<int> ids){
@@ -64,10 +68,13 @@ public:
 
         vertices = ids;
         redDegreeToVertices.insert(redDegreeToVertices.begin(), ids);
+        degreeToVertices.insert(degreeToVertices.begin(), ids);
     }
 
 
     void addEdge(int v1, int v2, const string& color = "black") {
+        updateVertexDegree(v1, 1);
+        updateVertexDegree(v2, 1);
         if (color == "black") {
             adjListBlack[v1].push_back(v2);
             adjListBlack[v2].push_back(v1);
@@ -82,9 +89,13 @@ public:
     void removeEdge(int v1, int v2) {
         if (std::find(adjListBlack[v1].begin(), adjListBlack[v1].end(), v2) != adjListBlack[v1].end()) {
             // order matters since updateVertexDegree uses adjListBlack's state
+            updateVertexDegree(v1, -1);
+            updateVertexDegree(v2, -1);
             adjListBlack[v1].erase(std::remove(adjListBlack[v1].begin(), adjListBlack[v1].end(), v2), adjListBlack[v1].end());
             adjListBlack[v2].erase(std::remove(adjListBlack[v2].begin(), adjListBlack[v2].end(), v1), adjListBlack[v2].end());
         } else if (std::find(adjListRed[v1].begin(), adjListRed[v1].end(), v2) != adjListRed[v1].end()) {
+            updateVertexDegree(v1, -1);
+            updateVertexDegree(v2, -1);
             updateVertexRedDegree(v1, -1);
             updateVertexRedDegree(v2, -1);
             adjListRed[v1].erase(std::remove(adjListRed[v1].begin(), adjListRed[v1].end(), v2), adjListRed[v1].end());
@@ -111,6 +122,7 @@ public:
         
         vertices.erase(std::find(vertices.begin(), vertices.end(), vertex));
         redDegreeToVertices[adjListRed[vertex].size()].erase(std::remove(redDegreeToVertices[adjListRed[vertex].size()].begin(), redDegreeToVertices[adjListRed[vertex].size()].end(), vertex));
+        degreeToVertices[adjListBlack[vertex].size() + adjListRed[vertex].size()].erase(std::remove(degreeToVertices[adjListRed[vertex].size() + adjListBlack[vertex].size()].begin(), degreeToVertices[adjListRed[vertex].size() + adjListBlack[vertex].size()].end(), vertex));
     }
 
     int getWidth() const {
@@ -122,18 +134,18 @@ public:
     }
 
     std::vector<Graph> findConnectedComponents() {
-        vector<int> visited;
+        ankerl::unordered_dense::set<int> visited;
         std::vector<Graph> componentGraphs;
-        int counter = 1;
 
+        int cnt = 0;
         for (int vertex : vertices) {
-            auto start = high_resolution_clock::now();
-            if (std::find(visited.begin(), visited.end(), vertex) == visited.end()) {
+            if (visited.find(vertex) == visited.end()) {
                 std::vector<int> component;
                 dfs(vertex, visited, component);
                 Graph subGraph;
                 subGraph.addVertices(vertices.size(), component);
                 for (int v : component) {
+                    subGraph.addVertex(v);
                     for (int neighbor : adjListBlack[v]) {
                         if (v < neighbor) { 
                             subGraph.addEdge(v, neighbor, "black");
@@ -143,21 +155,15 @@ public:
 
                 componentGraphs.push_back(subGraph);
             }
-            // auto stop = high_resolution_clock::now();
-            // auto duration = duration_cast<milliseconds>(stop - start);
-            // int seconds_part = duration.count() / 1000;
-            // int milliseconds_part = duration.count() % 1000;
-            // std::cout << "c Cycle " << counter <<  " in " << seconds_part << "." 
-            // << std::setfill('0') << std::setw(9) << milliseconds_part 
-            // << " seconds" << std::endl;
-            // counter++;
+            cout << cnt << endl;
+            cnt++;
         }
 
         return componentGraphs;
     }
 
-    void dfs(int v, vector<int>& visited, std::vector<int>& component) {
-        visited.push_back(v);
+    void dfs(int v, ankerl::unordered_dense::set<int>& visited, std::vector<int>& component) {
+        visited.insert(v);
         component.push_back(v);
         
         // For black edges
@@ -185,10 +191,32 @@ public:
         redDegreeToVertices[oldDegree + diff].push_back(vertex);
     }
 
+    void updateVertexDegree(int vertex, int diff) {
+        int oldDegree = adjListRed[vertex].size() + adjListBlack[vertex].size();
+        int newDegree = oldDegree + diff;
+        degreeToVertices[oldDegree].erase(std::remove(degreeToVertices[oldDegree].begin(), degreeToVertices[oldDegree].end(), vertex), degreeToVertices[oldDegree].end());
+        
+        if (degreeToVertices.size() <= newDegree) degreeToVertices.resize(newDegree + 1);
+        degreeToVertices[oldDegree + diff].push_back(vertex);
+    }
+
     std::vector<int> getTopNVerticesWithLowestRedDegree(int n) {
         std::vector<int> topVertices;
         
         for (const auto& degreeVector : redDegreeToVertices) {
+            for (int vertex : degreeVector) {
+                if (topVertices.size() >= n) break;
+                topVertices.push_back(vertex);
+            }
+            if (topVertices.size() >= n) break;
+        }
+        return topVertices;
+    }
+
+    std::vector<int> getTopNVerticesWithLowestDegree(int n) {
+        std::vector<int> topVertices;
+        
+        for (const auto& degreeVector : degreeToVertices) {
             for (int vertex : degreeVector) {
                 if (topVertices.size() >= n) break;
                 topVertices.push_back(vertex);
@@ -400,7 +428,118 @@ public:
         return contractionSequence;
     }
 
+    ostringstream findDegreeContraction(){ 
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
 
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
+            
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                for (int j = i+1; j < lowestDegreeVertices.size(); j++) {
+                    int v1 = lowestDegreeVertices[i];
+                    int v2 = lowestDegreeVertices[j];
+                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+                    
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            mergeVertices(bestPair.first, bestPair.second);
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Merged ( " << bestPair.first << "," << bestPair.second << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+        return contractionSequence;
+    }
+
+    ostringstream findDegreeContractionRandomWalk(){ 
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
+            
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                int v1 = lowestDegreeVertices[i];
+                set<int> randomWalkVertices = getRandomWalkVertices(v1, 10);  
+              
+                for (int v2 : randomWalkVertices) {
+                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+                    
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+
+            // if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c Not neighbors, score: " << bestScore << endl;
+            // else cout << "c Neighbors, score: " << bestScore << endl;
+
+            mergeVertices(bestPair.first, bestPair.second);
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+        return contractionSequence;
+    }
 
     ostringstream findRedDegreeContraction(){ 
         ostringstream contractionSequence;
@@ -555,7 +694,7 @@ int main() {
         // else componentContraction = c.findRedDegreeContraction();
         // cout << componentContraction.str();
 
-        cout << c.findRedDegreeContractionRandomWalk().str();
+        cout << c.findDegreeContraction().str();
         if (c.getVertices().size() == 1){
             int remainingVertex = *c.getVertices().begin() + 1;
             remainingVertices.push_back(remainingVertex);
