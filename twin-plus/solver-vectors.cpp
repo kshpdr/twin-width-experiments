@@ -27,6 +27,7 @@ struct PairHash {
 class Graph {
 private:
     vector<int> vertices;
+    vector<int> ids; // mapping id -> index, used for connected components
     vector<vector<int>> adjListBlack;  // For black edges
     vector<vector<int>> adjListRed;    // For red edges
     vector<vector<int>> redDegreeToVertices; // vertex id saved
@@ -38,6 +39,7 @@ public:
 
     Graph(const Graph &g) {
         this->vertices = g.vertices;
+        this->ids = g.ids;
         this->adjListBlack = g.adjListBlack;
         this->adjListRed = g.adjListRed;
         this->redDegreeToVertices = g.redDegreeToVertices;
@@ -45,10 +47,13 @@ public:
         this->width = g.width;
     }
 
-    void addVertex(int v){
-        vertices.push_back(v);
+    void updateDegrees(int v){
         updateVertexRedDegree(v, 0);
         updateVertexDegree(v, 0);
+    }
+
+    int getVertexId(int v){
+        return ids[v];
     }
         
     // Adds n vertices to the graph numbered from 0 to n-1
@@ -65,10 +70,12 @@ public:
     void addVertices(int n, vector<int> ids){
         adjListBlack.resize(n);
         adjListRed.resize(n);
+        vertices.resize(n);
 
-        vertices = ids;
-        redDegreeToVertices.insert(redDegreeToVertices.begin(), ids);
-        degreeToVertices.insert(degreeToVertices.begin(), ids);
+        this->ids = ids;
+        std::iota(vertices.begin(), vertices.end(), 0); // populate vertices with 0...n-1
+        redDegreeToVertices.insert(redDegreeToVertices.begin(), vertices);
+        degreeToVertices.insert(degreeToVertices.begin(), vertices);
     }
 
 
@@ -143,19 +150,21 @@ public:
                 std::vector<int> component;
                 dfs(vertex, visited, component);
                 Graph subGraph;
-                subGraph.addVertices(vertices.size(), component);
-                for (int v : component) {
-                    subGraph.addVertex(v);
-                    for (int neighbor : adjListBlack[v]) {
-                        if (v < neighbor) { 
-                            subGraph.addEdge(v, neighbor, "black");
+                subGraph.addVertices(component.size(), component);
+                for (size_t i = 0; i < component.size(); ++i) {
+                    subGraph.updateDegrees(i);
+                    for (int neighbor : adjListBlack[component[i]]) {
+                        if (component[i] < neighbor) {
+                            int vId = std::distance(component.begin(), std::find(component.begin(), component.end(), component[i])); 
+                            int neighborId = std::distance(component.begin(), std::find(component.begin(), component.end(), neighbor)); 
+                            subGraph.addEdge(vId, neighborId, "black");
                         }
                     }
                 }
 
                 componentGraphs.push_back(subGraph);
             }
-            cout << cnt << endl;
+            // cout << cnt << endl;
             cnt++;
         }
 
@@ -410,7 +419,7 @@ public:
                 }
             }
 
-            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
 
             // if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c Not neighbors, score: " << bestScore << endl;
             // else cout << "c Neighbors, score: " << bestScore << endl;
@@ -468,14 +477,14 @@ public:
                 }
             }
 
-            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
             mergeVertices(bestPair.first, bestPair.second);
 
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(stop - start);
             int seconds_part = duration.count() / 1000;
             int milliseconds_part = duration.count() % 1000;
-            std::cout << "c (Merged ( " << bestPair.first << "," << bestPair.second << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            std::cout << "c (Merged ( " << getVertexId(bestPair.first) << "," << getVertexId(bestPair.second) << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
         }
@@ -523,7 +532,7 @@ public:
                 }
             }
 
-            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
 
             // if (!areInTwoNeighborhood(bestPair.first, bestPair.second)) cout << "c Not neighbors, score: " << bestScore << endl;
             // else cout << "c Neighbors, score: " << bestScore << endl;
@@ -581,7 +590,7 @@ public:
                 }
             }
 
-            contractionSequence << bestPair.first + 1 << " " << bestPair.second + 1 << "\n";
+            contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
             mergeVertices(bestPair.first, bestPair.second);
 
             auto stop = high_resolution_clock::now();
@@ -694,9 +703,9 @@ int main() {
         // else componentContraction = c.findRedDegreeContraction();
         // cout << componentContraction.str();
 
-        cout << c.findDegreeContraction().str();
+        cout << c.findRedDegreeContractionRandomWalk().str();
         if (c.getVertices().size() == 1){
-            int remainingVertex = *c.getVertices().begin() + 1;
+            int remainingVertex = c.getVertexId(*c.getVertices().begin()) + 1;
             remainingVertices.push_back(remainingVertex);
         }
         else {
