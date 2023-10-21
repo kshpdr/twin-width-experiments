@@ -11,6 +11,7 @@
 #include <iomanip> 
 #include <unordered_dense.h>
 #include <queue>
+#include <unordered_set>
 
 using namespace std;
 using namespace std::chrono;
@@ -150,6 +151,7 @@ public:
                 std::vector<int> component;
                 dfs(vertex, visited, component);
                 Graph subGraph;
+                sort(component.begin(), component.end()); // for debug, else comment
                 subGraph.addVertices(component.size(), component);
                 for (size_t i = 0; i < component.size(); ++i) {
                     subGraph.updateDegrees(i);
@@ -314,6 +316,16 @@ public:
         }
     }
 
+    int getRealScore(int source, int twin) {
+        Graph graphCopy(*this);   // Assuming you've implemented the copy constructor for Graph class
+
+        // Merge vertices on the copied graph
+        graphCopy.mergeVertices(source, twin);
+
+        // Return the updated width of the copied graph
+        return graphCopy.getWidth();
+    }
+
     int getScore(int v1, int v2) {
         if (v1 == v2){
             cout << "hui";
@@ -327,6 +339,9 @@ public:
         if (!adjListRed[v2].empty()) {
             neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
         }
+
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
 
         vector<int> symmetric_difference;
         std::set_symmetric_difference(neighbors_v1.begin(), neighbors_v1.end(),
@@ -343,6 +358,169 @@ public:
         }
 
         return symmetric_difference.size();
+    }
+
+    int getScoreBlack(int v1, int v2) {
+        vector<int> neighbors_v1 = adjListBlack[v1];
+        vector<int> neighbors_v2 = adjListBlack[v2];
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
+
+        vector<int> symmetric_difference;
+        std::set_symmetric_difference(neighbors_v1.begin(), neighbors_v1.end(),
+                                    neighbors_v2.begin(), neighbors_v2.end(),
+                                    std::inserter(symmetric_difference, symmetric_difference.begin()));
+        auto it1 = std::find(symmetric_difference.begin(), symmetric_difference.end(), v1);
+        if (it1 != symmetric_difference.end()) {
+            symmetric_difference.erase(it1);
+        }
+
+        auto it2 = std::find(symmetric_difference.begin(), symmetric_difference.end(), v2);
+        if (it2 != symmetric_difference.end()) {
+            symmetric_difference.erase(it2);
+        }
+
+        return symmetric_difference.size();
+    }
+
+    float getGScore(int v1, int v2) {
+        vector<int> neighbors_v1 = adjListBlack[v1];
+        if (!adjListRed[v1].empty()) {
+            neighbors_v1.insert(neighbors_v1.end(), adjListRed[v1].begin(), adjListRed[v1].end());
+        }
+
+        vector<int> neighbors_v2 = adjListBlack[v2];
+        if (!adjListRed[v2].empty()) {
+            neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
+        }
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
+        
+        vector<int> common_neighbors;
+        set_intersection(neighbors_v1.begin(), neighbors_v1.end(), neighbors_v2.begin(), neighbors_v2.end(), back_inserter(common_neighbors));
+        float common_neighbors_count = common_neighbors.size();
+
+        // Degree Difference
+        float degree_diff = abs((float)neighbors_v1.size() - (float)neighbors_v2.size());
+
+        // Red Edges Count
+        float red_edges_count = adjListRed[v1].size() + adjListRed[v2].size();
+
+        // This is a simplistic formula and may need to be refined based on your specific needs and understanding of the graph structure.
+        float score = -common_neighbors_count + degree_diff + red_edges_count;
+
+        return score;
+    }
+
+    float getNScore(int v1, int v2) {
+        vector<int> neighbors_v1 = adjListBlack[v1];
+        vector<int> neighbors_v2 = adjListBlack[v2];
+
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
+
+        vector<int> symmetric_difference;
+        std::set_symmetric_difference(neighbors_v1.begin(), neighbors_v1.end(),
+                                    neighbors_v2.begin(), neighbors_v2.end(),
+                                    std::inserter(symmetric_difference, symmetric_difference.begin()));
+        auto it1 = std::find(symmetric_difference.begin(), symmetric_difference.end(), v1);
+        if (it1 != symmetric_difference.end()) {
+            symmetric_difference.erase(it1);
+        }
+
+        auto it2 = std::find(symmetric_difference.begin(), symmetric_difference.end(), v2);
+        if (it2 != symmetric_difference.end()) {
+            symmetric_difference.erase(it2);
+        }
+
+        std::vector<int> allNeighbors;
+        if (!adjListRed[v1].empty()) {
+            neighbors_v1.insert(neighbors_v1.end(), adjListRed[v1].begin(), adjListRed[v1].end());
+        }
+        if (!adjListRed[v2].empty()) {
+            neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
+        }
+        std::set_union(neighbors_v1.begin(), neighbors_v1.end(), neighbors_v2.begin(), neighbors_v2.end(), std::back_inserter(allNeighbors));
+
+        return symmetric_difference.size() + allNeighbors.size();
+    }
+
+    float getNeighborsScore(int v1, int v2) {
+        int black_score = getScoreBlack(v1, v2);
+        vector<int> neighbors_v1 = adjListBlack[v1];
+        vector<int> neighbors_v2 = adjListBlack[v2];
+        if (!adjListRed[v1].empty()) {
+            neighbors_v1.insert(neighbors_v1.end(), adjListRed[v1].begin(), adjListRed[v1].end());
+        }
+        if (!adjListRed[v2].empty()) {
+            neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
+        }
+
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
+
+        std::vector<int> allNeighbors;
+        std::set_union(neighbors_v1.begin(), neighbors_v1.end(), neighbors_v2.begin(), neighbors_v2.end(), std::back_inserter(allNeighbors));
+
+        return black_score +  black_score / allNeighbors.size();
+    }
+
+    int getScore1(int v1, int v2) {
+        vector<int> neighbors_v1 = adjListBlack[v1];
+        vector<int> neighbors_v2 = adjListBlack[v2];
+        if (!adjListRed[v2].empty()) {
+            neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
+        }
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
+
+        vector<int> symmetric_difference;
+        std::set_symmetric_difference(neighbors_v1.begin(), neighbors_v1.end(),
+                                    neighbors_v2.begin(), neighbors_v2.end(),
+                                    std::inserter(symmetric_difference, symmetric_difference.begin()));
+        auto it1 = std::find(symmetric_difference.begin(), symmetric_difference.end(), v1);
+        if (it1 != symmetric_difference.end()) {
+            symmetric_difference.erase(it1);
+        }
+
+        auto it2 = std::find(symmetric_difference.begin(), symmetric_difference.end(), v2);
+        if (it2 != symmetric_difference.end()) {
+            symmetric_difference.erase(it2);
+        }
+
+        return symmetric_difference.size();
+    }
+
+    float getG2Score(int v1, int v2) {
+        vector<int> neighbors_v1 = adjListBlack[v1];
+        if (!adjListRed[v1].empty()) {
+            neighbors_v1.insert(neighbors_v1.end(), adjListRed[v1].begin(), adjListRed[v1].end());
+        }
+
+        vector<int> neighbors_v2 = adjListBlack[v2];
+        if (!adjListRed[v2].empty()) {
+            neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
+        }
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
+
+        std::vector<int> allNeighbors;
+        std::set_union(neighbors_v1.begin(), neighbors_v1.end(), neighbors_v2.begin(), neighbors_v2.end(), std::back_inserter(allNeighbors));
+        float union_size = allNeighbors.size();
+
+        // Red-Black Edge Ratio
+        float red_edges_count = adjListRed[v1].size() + adjListRed[v2].size();
+        float black_edges_count = adjListBlack[v1].size() + adjListBlack[v2].size();
+        float red_black_ratio = (red_edges_count + 1) / (black_edges_count + 1);  // +1 to avoid division by zero
+
+        // Potential New Red Edges
+        // Assume that every neighbor of v1 and v2 will be connected by a red edge after merging
+        float potential_new_red_edges = union_size - (red_edges_count + black_edges_count);
+
+        // Score Formula: a linear combination of the above metrics
+        float score = union_size - red_black_ratio + potential_new_red_edges;
+
+        return score;
     }
 
     int getRandomDistance() {
@@ -550,7 +728,7 @@ public:
         return contractionSequence;
     }
 
-    ostringstream findRedDegreeContraction(){ 
+    ostringstream findBestVertexContraction(){ 
         ostringstream contractionSequence;
         ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
         auto heuristic_start_time = high_resolution_clock::now();
@@ -559,9 +737,78 @@ public:
         while (vertices.size() > 1) {
             auto start = high_resolution_clock::now();
 
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(1);
+            int v = lowestDegreeVertices[0];
+
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int n1 : adjListBlack[v]) {
+                int score;
+                for (int n2 : adjListBlack[v]) {
+                    if (v == n2) continue;
+                    score = getScore(v, n2);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v, n2};
+                    }
+                }
+                for (int n2 : adjListRed[v]) {
+                    if (v == n2) continue;
+                    score = getScore(v, n2);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v, n2};
+                    }
+                }
+            }
+
+            for (int n1 : adjListRed[v]) {
+                int score;
+                for (int n2 : adjListBlack[v]) {
+                    if (v == n2) continue;
+                    score = getScore(v, n2);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v, n2};
+                    }
+                }
+                for (int n2 : adjListRed[v]) {
+                    if (v == n2) continue;
+                    score = getScore(v, n2);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v, n2};
+                    }
+                }
+            }
+
+            contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
+            mergeVertices(bestPair.first, bestPair.second);
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Merged ( " << bestPair.first << "," << bestPair.second << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+        }
+        return contractionSequence;
+    }
+
+    ostringstream findRedDegreeContraction(){ 
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, float, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
             
-            int bestScore = INT_MAX;
+            float bestScore = INT_MAX;
             pair<int, int> bestPair;
 
             for (int i = 0; i < lowestDegreeVertices.size(); i++) {
@@ -574,12 +821,12 @@ public:
                     }
 
                     auto it = scores.find({v1, v2});
-                    int score;
+                    float score;
                     if (it != scores.end()) {
                         score = it->second;
                     }
                     else {
-                        score = getScore(v1, v2);
+                        score = getNeighborsScore(v1, v2);
                         scores[{v1, v2}] = score;
                     }
                     
@@ -602,6 +849,142 @@ public:
             << " seconds" << std::endl;
         }
         return contractionSequence;
+    }
+
+    ostringstream findRedDegreeContractionWhileLoop(){ 
+        ostringstream contractionSequence;
+        unordered_map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        unordered_set<int> mergedVertices;  // Moved outside the while loop
+
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                for (int j = i+1; j < lowestDegreeVertices.size(); j++) {
+                    int v1 = lowestDegreeVertices[i];
+                    int v2 = lowestDegreeVertices[j];
+                    if (v2 > v1) {
+                        swap(v1, v2);
+                    }
+
+                    int score = getScore(v1, v2);
+                    scores[{v1, v2}] = score;
+
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
+            if (getVertexId(bestPair.second) == 85) {
+                cout << "c checl";
+            }
+            mergeVertices(bestPair.first, bestPair.second);
+            mergedVertices.insert(bestPair.second);
+
+            for (const auto& [pair, score] : scores) {
+                auto [v1, v2] = pair;
+
+                // Check if either vertex has already been merged
+                if (mergedVertices.count(v1) || mergedVertices.count(v2)) {
+                    continue;
+                }
+
+                // // Check for independence
+                if (!checkIndependence(bestPair, pair)) {
+                    continue;
+                }
+
+                cout << "c wow (Merged (" << getVertexId(v1) << "," << getVertexId(v2) << ")" << endl;
+                contractionSequence << getVertexId(v1) + 1 << " " << getVertexId(v2) + 1 << "\n";
+                mergeVertices(v1, v2);
+                mergedVertices.insert(v2);
+            }
+
+            scores.clear();  // Clear scores for the next iteration
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            cout << "c (Merged ( " << getVertexId(bestPair.first) << "," << getVertexId(bestPair.second) << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+                 << setfill('0') << setw(9) << milliseconds_part 
+                 << " seconds" << endl;
+        }
+
+        return contractionSequence;
+    }
+
+    bool checkIndependence(std::pair<int, int> pair1, std::pair<int, int> pair2) {
+        // Get the second neighborhoods of the vertices in pair1 and pair2
+        std::vector<int> N2_v1 = getNeighbors(pair1.first);
+        std::vector<int> N2_v2 = getNeighbors(pair2.first);
+        std::vector<int> N2_u2 = getNeighbors(pair2.second);
+
+        // Combine the neighborhoods of each vertex pair
+        std::vector<int> union2;
+        std::set_union(N2_v2.begin(), N2_v2.end(), N2_u2.begin(), N2_u2.end(), std::back_inserter(union2));
+
+        // Check if the unions have any common elements
+        std::vector<int> intersection;
+        std::set_intersection(N2_v1.begin(), N2_v1.end(), union2.begin(), union2.end(), std::back_inserter(intersection));
+
+        return intersection.empty();  // Return true if there are no common elements, false otherwise
+    }
+
+    std::vector<int> getNeighbors(int vertex) {
+        vector<int> neighbors = adjListBlack[vertex];
+        neighbors.insert(neighbors.begin(), adjListRed[vertex].begin(), adjListRed[vertex].end());
+        return neighbors;
+    }
+
+    std::vector<int> getSecondNeighborhood(int vertexIndex) {
+        std::vector<bool> visited(vertices.size(), false);  // To keep track of visited vertices
+        std::queue<std::pair<int, int>> bfsQueue;  // Pair of vertex index and depth
+        
+        bfsQueue.push({vertexIndex, 0});
+        visited[vertexIndex] = true;
+        
+        std::vector<int> neighborhood;
+        
+        while (!bfsQueue.empty()) {
+            auto [currentVertex, depth] = bfsQueue.front();
+            bfsQueue.pop();
+            
+            // Explore the neighbors of the current vertex if the depth is less than 2
+            if (depth < 2) {
+                for (int neighbor : adjListBlack[currentVertex]) {  // Assuming black edges represent normal adjacency
+                    if (!visited[neighbor]) {
+                        visited[neighbor] = true;
+                        neighborhood.push_back(neighbor);
+                        bfsQueue.push({neighbor, depth + 1});
+                    }
+                }
+                
+                for (int neighbor : adjListRed[currentVertex]) {  // Assuming red edges represent normal adjacency
+                    if (!visited[neighbor]) {
+                        visited[neighbor] = true;
+                        neighborhood.push_back(neighbor);
+                        bfsQueue.push({neighbor, depth + 1});
+                    }
+                }
+            }
+        }
+
+        // Sort the neighborhood vector to enable efficient set operations later
+        std::sort(neighborhood.begin(), neighborhood.end());
+
+        return neighborhood;
     }
 
 private:
@@ -703,7 +1086,7 @@ int main() {
         // else componentContraction = c.findRedDegreeContraction();
         // cout << componentContraction.str();
 
-        cout << c.findRedDegreeContractionRandomWalk().str();
+        cout << c.findRedDegreeContraction().str();
         if (c.getVertices().size() == 1){
             int remainingVertex = c.getVertexId(*c.getVertices().begin()) + 1;
             remainingVertices.push_back(remainingVertex);
