@@ -12,6 +12,7 @@
 #include <unordered_dense.h>
 #include <queue>
 #include <unordered_set>
+#include <cmath>
 
 using namespace std;
 using namespace std::chrono;
@@ -81,12 +82,14 @@ public:
 
 
     void addEdge(int v1, int v2, const string& color = "black") {
-        updateVertexDegree(v1, 1);
-        updateVertexDegree(v2, 1);
-        if (color == "black") {
+        if (color == "black" && std::find(adjListBlack[v1].begin(), adjListBlack[v1].end(), v2) == adjListBlack[v1].end()) {
+            updateVertexDegree(v1, 1);
+            updateVertexDegree(v2, 1);
             adjListBlack[v1].push_back(v2);
             adjListBlack[v2].push_back(v1);
-        } else if (color == "red") {
+        } else if (color == "red" && std::find(adjListRed[v1].begin(), adjListRed[v1].end(), v2) == adjListRed[v1].end()) {
+            updateVertexDegree(v1, 1);
+            updateVertexDegree(v2, 1);
             updateVertexRedDegree(v1, 1);
             updateVertexRedDegree(v2, 1);
             adjListRed[v1].push_back(v2);
@@ -211,6 +214,27 @@ public:
         degreeToVertices[oldDegree + diff].push_back(vertex);
     }
 
+    int getWorstVertex() {
+        for (auto rit = redDegreeToVertices.rbegin(); rit != redDegreeToVertices.rend(); ++rit) {
+            const auto& degreeVector = *rit;
+            if (degreeVector.empty()) continue;
+            for (int vertex : degreeVector) {
+                return vertex;
+            }
+        }
+        return -1;
+    }
+
+    bool contrainsWorstVertex(int v1, int v2, int worstVertex) {
+        vector<int> black_neighbors = adjListBlack[worstVertex];
+        vector<int> red_neighbors = adjListRed[worstVertex];
+        if (std::find(black_neighbors.begin(), black_neighbors.end(), v1) != black_neighbors.end()) return true;
+        if (std::find(red_neighbors.begin(), red_neighbors.end(), v1) != red_neighbors.end()) return true;
+        if (std::find(black_neighbors.begin(), black_neighbors.end(), v2) != black_neighbors.end()) return true;
+        if (std::find(red_neighbors.begin(), red_neighbors.end(), v2) != red_neighbors.end()) return true;
+        return false;
+    }
+
     std::vector<int> getTopNVerticesWithLowestRedDegree(int n) {
         std::vector<int> topVertices;
         
@@ -258,6 +282,9 @@ public:
         // if (!adjListRed[twin].empty()) {
         //     mergedTwinNeighbors.insert(mergedTwinNeighbors.end(), adjListRed[twin].begin(), adjListRed[twin].end());
         // }
+        sort(mergedSourceNeighbors.begin(), mergedSourceNeighbors.end());
+        sort(mergedTwinNeighbors.begin(), mergedTwinNeighbors.end());
+
 
         // Find edges of twin that are not adjacent to source
         std::vector<int> newRedEdges;
@@ -269,9 +296,10 @@ public:
 
         // Add these edges as red edges for source
         for (int v : newRedEdges) {
-            if (std::find(adjListRed[source].begin(), adjListRed[source].end(), v) == adjListRed[source].end()) {
-                addEdge(source, v, "red");
-            }
+            addEdge(source, v, "red");
+            // if (std::find(adjListRed[source].begin(), adjListRed[source].end(), v) == adjListRed[source].end()) {
+            //     addEdge(source, v, "red");
+            // }
         }
     }
 
@@ -300,6 +328,9 @@ public:
         vector<int> source_neighbors(adjListBlack[source].begin(), adjListBlack[source].end());
         vector<int> twin_neighbors(adjListBlack[twin].begin(), adjListBlack[twin].end());
 
+        sort(source_neighbors.begin(), source_neighbors.end());
+        sort(twin_neighbors.begin(), twin_neighbors.end());
+
         vector<int> toBecomeRed;
         std::set_difference(
             source_neighbors.begin(), source_neighbors.end(),
@@ -309,10 +340,11 @@ public:
 
         for (int v : toBecomeRed) {
             removeEdge(source, v);
+            addEdge(source, v, "red");
             // don't understand why is this possible since were considering only black edges
-            if (std::find(adjListRed[source].begin(), adjListRed[source].end(), v) == adjListRed[source].end()) {
-                addEdge(source, v, "red");
-            }
+            // if (std::find(adjListRed[source].begin(), adjListRed[source].end(), v) == adjListRed[source].end()) {
+            //     addEdge(source, v, "red");
+            // }
         }
     }
 
@@ -393,6 +425,35 @@ public:
         if (!adjListRed[v2].empty()) {
             neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
         }
+        sort(neighbors_v1.begin(), neighbors_v1.end());
+        sort(neighbors_v2.begin(), neighbors_v2.end());
+        
+        vector<int> common_neighbors;
+        set_intersection(neighbors_v1.begin(), neighbors_v1.end(), neighbors_v2.begin(), neighbors_v2.end(), back_inserter(common_neighbors));
+        float common_neighbors_count = common_neighbors.size();
+
+        // Degree Difference
+        float degree_diff = abs((float)neighbors_v1.size() - (float)neighbors_v2.size());
+
+        // Red Edges Count
+        float red_edges_count = adjListRed[v1].size() + adjListRed[v2].size();
+
+        // This is a simplistic formula and may need to be refined based on your specific needs and understanding of the graph structure.
+        float score = -common_neighbors_count + degree_diff + red_edges_count;
+
+        return score;
+    }
+
+    float getGScoreBlack(int v1, int v2) {
+        vector<int> neighbors_v1 = adjListBlack[v1];
+        // if (!adjListRed[v1].empty()) {
+        //     neighbors_v1.insert(neighbors_v1.end(), adjListRed[v1].begin(), adjListRed[v1].end());
+        // }
+
+        vector<int> neighbors_v2 = adjListBlack[v2];
+        // if (!adjListRed[v2].empty()) {
+        //     neighbors_v2.insert(neighbors_v2.end(), adjListRed[v2].begin(), adjListRed[v2].end());
+        // }
         sort(neighbors_v1.begin(), neighbors_v1.end());
         sort(neighbors_v2.begin(), neighbors_v2.end());
         
@@ -625,6 +686,9 @@ public:
             auto start = high_resolution_clock::now();
 
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
+            // vector<int> lowestDegreeVertices;
+            // if (vertices.size() < 50) lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
+            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(sqrt(vertices.size()))));            
             
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
@@ -799,16 +863,27 @@ public:
 
     ostringstream findRedDegreeContraction(){ 
         ostringstream contractionSequence;
-        ankerl::unordered_dense::map<pair<int, int>, float, PairHash> scores;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
         auto heuristic_start_time = high_resolution_clock::now();
         
         int iterationCounter = 0;
         while (vertices.size() > 1) {
             auto start = high_resolution_clock::now();
 
-            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            vector<int> lowestDegreeVertices;
+            if (iterationCounter == 0) {
+                    std::random_device rd;
+                    std::mt19937 g(rd());
+                    vector<int> v_copy(vertices);
+                    std::shuffle(v_copy.begin(), v_copy.end(), g);
+                    int num_elements = std::min((int)v_copy.size(), 20);  // Take 20 elements or the entire vector if it has fewer than 20 elements
+                    lowestDegreeVertices.assign(v_copy.begin(), v_copy.begin() + num_elements);
+            }
+            else lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            // if (vertices.size() < 50) lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            // else lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(static_cast<int>(ceil(vertices.size() / 10.0)));            
             
-            float bestScore = INT_MAX;
+            int bestScore = INT_MAX;
             pair<int, int> bestPair;
 
             for (int i = 0; i < lowestDegreeVertices.size(); i++) {
@@ -821,12 +896,69 @@ public:
                     }
 
                     auto it = scores.find({v1, v2});
-                    float score;
+                    int score;
                     if (it != scores.end()) {
                         score = it->second;
                     }
                     else {
-                        score = getNeighborsScore(v1, v2);
+                        score = getScore(v1, v2);
+                        scores[{v1, v2}] = score;
+                    }
+                    
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
+            mergeVertices(bestPair.first, bestPair.second);
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Merged ( " << bestPair.first << "," << bestPair.second << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+            iterationCounter++;
+        }
+        return contractionSequence;
+    }
+
+    ostringstream findRedDegreeContractionWorstVertex(){ 
+        ostringstream contractionSequence;
+        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            int worstVertex = getWorstVertex();
+            
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                for (int j = i+1; j < lowestDegreeVertices.size(); j++) {
+                    int v1 = lowestDegreeVertices[i];
+                    int v2 = lowestDegreeVertices[j];
+                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = scores.find({v1, v2});
+                    int score;
+                    if (it != scores.end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        if (contrainsWorstVertex(v1,v2,worstVertex)) score += 5;
                         scores[{v1, v2}] = score;
                     }
                     
@@ -931,10 +1063,15 @@ public:
         std::vector<int> N2_v2 = getNeighbors(pair2.first);
         std::vector<int> N2_u2 = getNeighbors(pair2.second);
 
+        std::sort(N2_v1.begin(), N2_v1.end());
+        std::sort(N2_v2.begin(), N2_v2.end());
+        std::sort(N2_u2.begin(), N2_u2.end());
+
         // Combine the neighborhoods of each vertex pair
         std::vector<int> union2;
         std::set_union(N2_v2.begin(), N2_v2.end(), N2_u2.begin(), N2_u2.end(), std::back_inserter(union2));
 
+        std::sort(union2.begin(), union2.end());
         // Check if the unions have any common elements
         std::vector<int> intersection;
         std::set_intersection(N2_v1.begin(), N2_v1.end(), union2.begin(), union2.end(), std::back_inserter(intersection));
@@ -988,9 +1125,18 @@ public:
     }
 
 private:
+    // void updateWidth() {
+    //     for (const auto& innerVector : adjListRed) {
+    //         width = max(width, static_cast<int>(innerVector.size()));
+    //     }
+    // }
+
     void updateWidth() {
-        for (const auto& innerVector : adjListRed) {
-            width = max(width, static_cast<int>(innerVector.size()));
+        for (int i = redDegreeToVertices.size() - 1; i >= 0; i--) {
+            if (!redDegreeToVertices[i].empty()) {
+                width = max(width ,i);
+                break;
+            }
         }
     }
 
@@ -1018,6 +1164,7 @@ int main() {
     string line;
     int numVertices, numEdges;
     set<pair<int, int>> readEdges;
+    double density;
     bool constructComplement = false;
 
     auto start = high_resolution_clock::now(); 
@@ -1039,7 +1186,7 @@ int main() {
             numEdges = stoi(tokens[3]);
             g.addVertices(numVertices);
 
-            double density = (2.0 * numEdges) / (numVertices * (numVertices - 1));
+            density = (2.0 * numEdges) / (numVertices * (numVertices - 1));
             if (density > 0.5) {
                 constructComplement = true;
             }
@@ -1070,6 +1217,7 @@ int main() {
 
     std::vector<Graph> components = g.findConnectedComponents();
     std::vector<int> remainingVertices;
+    int maxTww = 0;
     for (Graph& c : components) {
         std::vector<int> partition1;
         std::vector<int> partition2;
@@ -1085,8 +1233,16 @@ int main() {
         // }
         // else componentContraction = c.findRedDegreeContraction();
         // cout << componentContraction.str();
+        // if (density < 0.01) {
+        //     cout << c.findRedDegreeContractionRandomWalk().str();
+        // }
+        // else {
+        //     cout << c.findRedDegreeContraction().str();
+        // }
 
-        cout << c.findRedDegreeContraction().str();
+        cout << c.findDegreeContraction().str();
+        maxTww = max(maxTww, c.getWidth());
+
         if (c.getVertices().size() == 1){
             int remainingVertex = c.getVertexId(*c.getVertices().begin()) + 1;
             remainingVertices.push_back(remainingVertex);
@@ -1111,6 +1267,6 @@ int main() {
     auto final_stop = high_resolution_clock::now();
     auto final_duration = duration_cast<seconds>(final_stop - start);
     std::cout << "c In total: " << final_duration.count() << " seconds" << std::endl;
-
+    cout << "c twin-width: " << maxTww << endl;
     return 0;    
 }
