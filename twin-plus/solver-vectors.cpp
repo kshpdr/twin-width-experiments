@@ -672,13 +672,14 @@ public:
             std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
+            iterationCounter++;
         }
         return contractionSequence;
     }
 
     ostringstream findDegreeContraction(){ 
         ostringstream contractionSequence;
-        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        vector<vector<pair<int, int>>> scores(vertices.size());
         auto heuristic_start_time = high_resolution_clock::now();
         
         int iterationCounter = 0;
@@ -702,14 +703,15 @@ public:
                         std::swap(v1, v2);
                     }
 
-                    auto it = scores.find({v1, v2});
+                    auto it = find_if(scores[v1].begin(), scores[v1].end(),
+                                    [v2](const pair<int, int>& p){ return p.first == v2; });
                     int score;
-                    if (it != scores.end()) {
+                    if (it != scores[v1].end()) {
                         score = it->second;
                     }
                     else {
                         score = getScore(v1, v2);
-                        scores[{v1, v2}] = score;
+                        scores[v1].push_back({v2, score});
                     }
                     
                     if (score < bestScore) {
@@ -733,6 +735,7 @@ public:
         return contractionSequence;
     }
 
+
     ostringstream findDegreeContractionRandomWalk(){ 
         ostringstream contractionSequence;
         ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
@@ -752,7 +755,6 @@ public:
                 set<int> randomWalkVertices = getRandomWalkVertices(v1, 10);  
               
                 for (int v2 : randomWalkVertices) {
-                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
                     if (v2 > v1) {
                         std::swap(v1, v2);
                     }
@@ -1215,12 +1217,17 @@ int main() {
     auto duration = duration_cast<seconds>(stop - start);
     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
 
+    start = high_resolution_clock::now(); 
     std::vector<Graph> components = g.findConnectedComponents();
+    stop = high_resolution_clock::now();
+    duration = duration_cast<seconds>(stop - start);
+    cout << "c Time taken for connected components: " << duration.count() << " seconds" << std::endl;
+
     std::vector<int> remainingVertices;
     int maxTww = 0;
     for (Graph& c : components) {
-        std::vector<int> partition1;
-        std::vector<int> partition2;
+        vector<int> partition1;
+        vector<int> partition2;
         ostringstream componentContraction;
 
         // ostringstream twins = c.findTwins();
