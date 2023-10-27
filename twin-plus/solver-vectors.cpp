@@ -13,9 +13,13 @@
 #include <queue>
 #include <unordered_set>
 #include <cmath>
+#include "BoostGraph.hpp"
 
 using namespace std;
 using namespace std::chrono;
+
+const int SCORE_RESET_THRESHOLD = 1000;
+int cnt = 0;
 
 struct PairHash {
     template <class T1, class T2>
@@ -80,6 +84,9 @@ public:
         degreeToVertices.insert(degreeToVertices.begin(), vertices);
     }
 
+    void setIds(vector<int> values) {
+        ids = values;
+    }
 
     void addEdge(int v1, int v2, const string& color = "black") {
         if (color == "black" && std::find(adjListBlack[v1].begin(), adjListBlack[v1].end(), v2) == adjListBlack[v1].end()) {
@@ -144,6 +151,36 @@ public:
         return vertices;
     }
 
+    std::vector<Graph> findConnectedComponentsBoost() {
+        BoostGraph boostGraph(vertices.size());
+        for (int i = 0; i < adjListBlack.size(); ++i) {
+            for (int j = 0; j < adjListBlack[i].size(); ++j) {
+                boostGraph.addEdge(i, adjListBlack[i][j]);
+            }
+        }
+
+        vector<set<pair<int, int>>> components;
+        vector<vector<int>> vertices;
+        std::tie(components, vertices) = boostGraph.getConnectedComponentAndVertices();  // Call getConnectedComponents and unpack the result
+        std::vector<Graph> result;
+        for (int i = 0; i < components.size(); ++i) {
+            Graph g;
+            g.addVertices(vertices[i].size(), vertices[i]);
+            constructFromEdges(g, components[i]);
+            result.push_back(g);
+        }
+        for (const auto& edges : components) {
+        }
+        return result;
+    }
+
+    static void constructFromEdges(Graph& g, const std::set<std::pair<int, int>>& edges) {
+        for (const auto& edge : edges) {
+            int u = edge.first, v = edge.second;
+            g.addEdge(u, v, "black");
+        }
+    }
+
     std::vector<Graph> findConnectedComponents() {
         ankerl::unordered_dense::set<int> visited;
         std::vector<Graph> componentGraphs;
@@ -154,7 +191,7 @@ public:
                 std::vector<int> component;
                 dfs(vertex, visited, component);
                 Graph subGraph;
-                sort(component.begin(), component.end()); // for debug, else comment
+                // sort(component.begin(), component.end()); // for debug, else comment
                 subGraph.addVertices(component.size(), component);
                 for (size_t i = 0; i < component.size(); ++i) {
                     subGraph.updateDegrees(i);
@@ -177,6 +214,9 @@ public:
     }
 
     void dfs(int v, ankerl::unordered_dense::set<int>& visited, std::vector<int>& component) {
+        std::cout << "Vertex " << v << endl;
+        std::cout << "Count: " << cnt << endl;
+        cnt++; 
         visited.insert(v);
         component.push_back(v);
         
@@ -619,15 +659,21 @@ public:
 
     ostringstream findRedDegreeContractionRandomWalk(){ 
         ostringstream contractionSequence;
-        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        vector<vector<pair<int, int>>> scores(vertices.size());
         auto heuristic_start_time = high_resolution_clock::now();
         
         int iterationCounter = 0;
         while (vertices.size() > 1) {
             auto start = high_resolution_clock::now();
 
+            auto lstart = high_resolution_clock::now();
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
-            
+            auto lstop = high_resolution_clock::now();
+            auto lduration = duration_cast<milliseconds>(lstop - lstart);
+            int lseconds_part = lduration.count() / 1000;
+            int lmilliseconds_part = lduration.count() % 1000;
+            std::cout << "c Got them in " << lseconds_part << "." << std::setfill('0') << std::setw(25) << lmilliseconds_part << endl;
+
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
 
@@ -641,14 +687,15 @@ public:
                         std::swap(v1, v2);
                     }
 
-                    auto it = scores.find({v1, v2});
+                    auto it = find_if(scores[v1].begin(), scores[v1].end(),
+                                    [v2](const pair<int, int>& p){ return p.first == v2; });
                     int score;
-                    if (it != scores.end()) {
+                    if (it != scores[v1].end()) {
                         score = it->second;
                     }
                     else {
                         score = getScore(v1, v2);
-                        scores[{v1, v2}] = score;
+                        scores[v1].push_back({v2, score});
                     }
                     
                     if (score < bestScore) {
@@ -672,7 +719,9 @@ public:
             std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
-            iterationCounter++;
+            for(int i = 0; i < scores.size(); ++i) {
+                scores[i].clear();
+            }
         }
         return contractionSequence;
     }
@@ -689,7 +738,7 @@ public:
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
             // vector<int> lowestDegreeVertices;
             // if (vertices.size() < 50) lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
-            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(sqrt(vertices.size()))));            
+            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(vertices.size() / 10.0)));            
             
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
@@ -724,6 +773,14 @@ public:
             contractionSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
             mergeVertices(bestPair.first, bestPair.second);
 
+
+            if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
+                for(int i = 0; i < scores.size(); ++i) {
+                    scores[i].clear();
+                }
+                iterationCounter = 0;
+            }
+
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(stop - start);
             int seconds_part = duration.count() / 1000;
@@ -731,6 +788,7 @@ public:
             std::cout << "c (Merged ( " << getVertexId(bestPair.first) << "," << getVertexId(bestPair.second) << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
+            // scores.clear();
         }
         return contractionSequence;
     }
@@ -738,7 +796,7 @@ public:
 
     ostringstream findDegreeContractionRandomWalk(){ 
         ostringstream contractionSequence;
-        ankerl::unordered_dense::map<pair<int, int>, int, PairHash> scores;
+        vector<vector<pair<int, int>>> scores(vertices.size());
         auto heuristic_start_time = high_resolution_clock::now();
         
         int iterationCounter = 0;
@@ -746,7 +804,7 @@ public:
             auto start = high_resolution_clock::now();
 
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
-            
+
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
 
@@ -759,14 +817,15 @@ public:
                         std::swap(v1, v2);
                     }
 
-                    auto it = scores.find({v1, v2});
+                    auto it = find_if(scores[v1].begin(), scores[v1].end(),
+                                    [v2](const pair<int, int>& p){ return p.first == v2; });
                     int score;
-                    if (it != scores.end()) {
+                    if (it != scores[v1].end()) {
                         score = it->second;
                     }
                     else {
                         score = getScore(v1, v2);
-                        scores[{v1, v2}] = score;
+                        scores[v1].push_back({v2, score});
                     }
                     
                     if (score < bestScore) {
@@ -790,6 +849,9 @@ public:
             std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
+            // for(int i = 0; i < scores.size(); ++i) {
+            //     scores[i].clear();
+            // }
         }
         return contractionSequence;
     }
@@ -925,6 +987,7 @@ public:
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
             iterationCounter++;
+            scores.clear();
         }
         return contractionSequence;
     }
@@ -1217,8 +1280,11 @@ int main() {
     auto duration = duration_cast<seconds>(stop - start);
     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
 
+    // g.setIds(g.getVertices());
+    // cout << g.findDegreeContractionRandomWalk().str();
+
     start = high_resolution_clock::now(); 
-    std::vector<Graph> components = g.findConnectedComponents();
+    std::vector<Graph> components = g.findConnectedComponentsBoost();
     stop = high_resolution_clock::now();
     duration = duration_cast<seconds>(stop - start);
     cout << "c Time taken for connected components: " << duration.count() << " seconds" << std::endl;
@@ -1247,7 +1313,7 @@ int main() {
         //     cout << c.findRedDegreeContraction().str();
         // }
 
-        cout << c.findDegreeContraction().str();
+        cout << c.findDegreeContractionRandomWalk().str();
         maxTww = max(maxTww, c.getWidth());
 
         if (c.getVertices().size() == 1){

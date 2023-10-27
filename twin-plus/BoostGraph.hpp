@@ -39,6 +39,29 @@ public:
         return components;
     }
 
+    std::pair<std::vector<std::set<std::pair<int, int>>>, std::vector<std::vector<int>>> getConnectedComponentAndVertices() {
+        std::vector<int> component(num_vertices(g));
+        int num = connected_components(g, &component[0]);
+
+        std::vector<std::set<std::pair<int, int>>> components(num);
+        std::vector<std::set<int>> vertices_sets(num);
+        Graph::edge_iterator ei, ei_end;
+        for(boost::tie(ei, ei_end) = edges(g); ei != ei_end; ++ei) {
+            int source_vertex = boost::source(*ei, g);
+            int target_vertex = boost::target(*ei, g);
+            components[component[source_vertex]].insert({source_vertex, target_vertex});
+            vertices_sets[component[source_vertex]].insert(source_vertex);
+            vertices_sets[component[target_vertex]].insert(target_vertex);
+        }
+
+        std::vector<std::vector<int>> vertices_in_components(num);
+        for (size_t i = 0; i < num; ++i) {
+            vertices_in_components[i] = std::vector<int>(vertices_sets[i].begin(), vertices_sets[i].end());
+        }
+
+        return {components, vertices_in_components};
+    }
+
     bool isBipartite(std::vector<int>& partition1, std::vector<int>& partition2) {
         std::vector<boost::default_color_type> color_map(num_vertices(g));
         bool is_bipartite = boost::is_bipartite(g, boost::make_iterator_property_map(
