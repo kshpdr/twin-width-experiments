@@ -18,8 +18,9 @@
 using namespace std;
 using namespace std::chrono;
 
-const int SCORE_RESET_THRESHOLD = 1000;
+const int SCORE_RESET_THRESHOLD = 10000000;
 int cnt = 0;
+bool connectedComponents = true;
 
 struct PairHash {
     template <class T1, class T2>
@@ -70,7 +71,7 @@ public:
 
         std::iota(vertices.begin(), vertices.end(), 0); // populate vertices with 0...n-1
         redDegreeToVertices.insert(redDegreeToVertices.begin(), vertices);
-        degreeToVertices.insert(degreeToVertices.begin(), vertices);
+        // degreeToVertices.insert(degreeToVertices.begin(), vertices);
     }
 
     void addVertices(int n, vector<int> ids){
@@ -81,11 +82,25 @@ public:
         this->ids = ids;
         std::iota(vertices.begin(), vertices.end(), 0); // populate vertices with 0...n-1
         redDegreeToVertices.insert(redDegreeToVertices.begin(), vertices);
-        degreeToVertices.insert(degreeToVertices.begin(), vertices);
+        // degreeToVertices.insert(degreeToVertices.begin(), vertices);
     }
 
     void setIds(vector<int> values) {
         ids = values;
+    }
+
+    void addEdgeBegin(int v1, int v2) {
+        if (v1 < v2) {
+            adjListBlack[v2].push_back(v1);
+            adjListBlack[v1].push_back(v2);
+        }
+    }
+
+    void updateBlackDegrees() {
+        for (int i = 0; i < adjListBlack.size(); ++i) {
+            if (degreeToVertices.size() <= adjListBlack[i].size()) degreeToVertices.resize(adjListBlack[i].size() + 1);
+            degreeToVertices[adjListBlack[i].size()].push_back(i);
+        }
     }
 
     void addEdge(int v1, int v2, const string& color = "black") {
@@ -151,6 +166,10 @@ public:
         return vertices;
     }
 
+    vector<int> getIds() {
+        return this->ids;
+    }
+
     std::vector<Graph> findConnectedComponentsBoost() {
         BoostGraph boostGraph(vertices.size());
         for (int i = 0; i < adjListBlack.size(); ++i) {
@@ -163,10 +182,16 @@ public:
         vector<vector<int>> vertices;
         std::tie(components, vertices) = boostGraph.getConnectedComponentAndVertices();  // Call getConnectedComponents and unpack the result
         std::vector<Graph> result;
+        if (components.size() == 1) {
+            result.push_back(*this);
+            return result;
+        }
+
         for (int i = 0; i < components.size(); ++i) {
             Graph g;
             g.addVertices(vertices[i].size(), vertices[i]);
             constructFromEdges(g, components[i]);
+            g.updateBlackDegrees();
             result.push_back(g);
         }
         for (const auto& edges : components) {
@@ -177,8 +202,28 @@ public:
     static void constructFromEdges(Graph& g, const std::set<std::pair<int, int>>& edges) {
         for (const auto& edge : edges) {
             int u = edge.first, v = edge.second;
-            g.addEdge(u, v, "black");
+            vector<int> ids = g.getIds();
+            int vId = std::distance(ids.begin(), std::find(ids.begin(), ids.end(), v)); 
+            int uId = std::distance(ids.begin(), std::find(ids.begin(), ids.end(), u)); 
+            g.addEdgeBegin(vId, uId);
         }
+    }
+
+    float getDegreeDeviation() {
+        int totalVertices = vertices.size();
+        int totalDegree = 0;
+        for(int i = 0; i < degreeToVertices.size(); ++i) {
+            totalDegree += i * degreeToVertices[i].size();
+        }
+        float meanDegree = static_cast<float>(totalDegree) / totalVertices;
+
+        float sumAbsoluteDeviations = 0.0;
+        for(int i = 0; i < degreeToVertices.size(); ++i) {
+            sumAbsoluteDeviations += abs(i - meanDegree) * degreeToVertices[i].size();
+        }
+        
+        float averageDegreeDeviation = sumAbsoluteDeviations / totalVertices;
+        return averageDegreeDeviation;
     }
 
     std::vector<Graph> findConnectedComponents() {
@@ -194,12 +239,12 @@ public:
                 // sort(component.begin(), component.end()); // for debug, else comment
                 subGraph.addVertices(component.size(), component);
                 for (size_t i = 0; i < component.size(); ++i) {
-                    subGraph.updateDegrees(i);
+                    // subGraph.updateDegrees(i);
                     for (int neighbor : adjListBlack[component[i]]) {
                         if (component[i] < neighbor) {
                             int vId = std::distance(component.begin(), std::find(component.begin(), component.end(), component[i])); 
                             int neighborId = std::distance(component.begin(), std::find(component.begin(), component.end(), neighbor)); 
-                            subGraph.addEdge(vId, neighborId, "black");
+                            subGraph.addEdgeBegin(vId, neighborId);
                         }
                     }
                 }
@@ -214,8 +259,8 @@ public:
     }
 
     void dfs(int v, ankerl::unordered_dense::set<int>& visited, std::vector<int>& component) {
-        std::cout << "Vertex " << v << endl;
-        std::cout << "Count: " << cnt << endl;
+        // std::cout << "Vertex " << v << endl;
+        // std::cout << "Count: " << cnt << endl;
         cnt++; 
         visited.insert(v);
         component.push_back(v);
@@ -666,13 +711,7 @@ public:
         while (vertices.size() > 1) {
             auto start = high_resolution_clock::now();
 
-            auto lstart = high_resolution_clock::now();
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
-            auto lstop = high_resolution_clock::now();
-            auto lduration = duration_cast<milliseconds>(lstop - lstart);
-            int lseconds_part = lduration.count() / 1000;
-            int lmilliseconds_part = lduration.count() % 1000;
-            std::cout << "c Got them in " << lseconds_part << "." << std::setfill('0') << std::setw(25) << lmilliseconds_part << endl;
 
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
@@ -682,7 +721,6 @@ public:
                 set<int> randomWalkVertices = getRandomWalkVertices(v1, 10);  
               
                 for (int v2 : randomWalkVertices) {
-                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
                     if (v2 > v1) {
                         std::swap(v1, v2);
                     }
@@ -719,6 +757,7 @@ public:
             std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
+
             for(int i = 0; i < scores.size(); ++i) {
                 scores[i].clear();
             }
@@ -738,7 +777,7 @@ public:
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
             // vector<int> lowestDegreeVertices;
             // if (vertices.size() < 50) lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
-            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(vertices.size() / 10.0)));            
+            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(log(vertices.size()))));            
             
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
@@ -774,12 +813,12 @@ public:
             mergeVertices(bestPair.first, bestPair.second);
 
 
-            if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
-                for(int i = 0; i < scores.size(); ++i) {
-                    scores[i].clear();
-                }
-                iterationCounter = 0;
-            }
+            // if (++iterationCounter >= SCORE_RESET_THRESHOLD) {
+            //     for(int i = 0; i < scores.size(); ++i) {
+            //         scores[i].clear();
+            //     }
+            //     iterationCounter = 0;
+            // }
 
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(stop - start);
@@ -788,7 +827,10 @@ public:
             std::cout << "c (Merged ( " << getVertexId(bestPair.first) << "," << getVertexId(bestPair.second) << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
             << std::setfill('0') << std::setw(9) << milliseconds_part 
             << " seconds" << std::endl;
-            // scores.clear();
+
+            for(int i = 0; i < scores.size(); ++i) {
+                scores[i].clear();
+            }
         }
         return contractionSequence;
     }
@@ -1262,7 +1304,7 @@ int main() {
         } else {
             int u = stoi(tokens[0]);
             int v = stoi(tokens[1]);
-            g.addEdge(u - 1, v - 1, "black");
+            g.addEdgeBegin(u - 1, v - 1);
         }
     }
 
@@ -1270,21 +1312,36 @@ int main() {
         for (int i = 0; i < numVertices; i++) {
             for (int j = i + 1; j < numVertices; j++) {
                 if (readEdges.find({i, j}) == readEdges.end()) {
-                    g.addEdge(i, j, "black");
+                    g.addEdgeBegin(i, j);
                 }
             }
         }
     }
+    g.updateBlackDegrees();
+    g.setIds(g.getVertices());
 
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
 
+    // for (int i = 0; i <= 3598623; ++i){
+    //     cout << i << endl;
+    //     g.getTopNVerticesWithLowestDegree(20);
+    // }
+
     // g.setIds(g.getVertices());
     // cout << g.findDegreeContractionRandomWalk().str();
 
     start = high_resolution_clock::now(); 
-    std::vector<Graph> components = g.findConnectedComponentsBoost();
+    
+    vector<Graph> components;
+    if (connectedComponents) {
+        components = g.findConnectedComponentsBoost();
+    }
+    else {
+        components.push_back(g);
+    }
+    
     stop = high_resolution_clock::now();
     duration = duration_cast<seconds>(stop - start);
     cout << "c Time taken for connected components: " << duration.count() << " seconds" << std::endl;
@@ -1313,7 +1370,14 @@ int main() {
         //     cout << c.findRedDegreeContraction().str();
         // }
 
-        cout << c.findDegreeContractionRandomWalk().str();
+        float degreeDeviation = c.getDegreeDeviation();
+        cout << "c Deviation: " << degreeDeviation << endl;
+
+        // if (degreeDeviation <= 25.0) cout << c.findRedDegreeContractionRandomWalk().str();
+        // else cout << c.findDegreeContraction().str();
+
+        cout << c.findRedDegreeContractionRandomWalk().str();
+
         maxTww = max(maxTww, c.getWidth());
 
         if (c.getVertices().size() == 1){
