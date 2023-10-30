@@ -45,6 +45,8 @@ public:
 
         std::vector<std::set<std::pair<int, int>>> components(num);
         std::vector<std::set<int>> vertices_sets(num);
+        
+        // Process edges and gather vertices that are connected by these edges
         Graph::edge_iterator ei, ei_end;
         for(boost::tie(ei, ei_end) = edges(g); ei != ei_end; ++ei) {
             int source_vertex = boost::source(*ei, g);
@@ -52,6 +54,11 @@ public:
             components[component[source_vertex]].insert({source_vertex, target_vertex});
             vertices_sets[component[source_vertex]].insert(source_vertex);
             vertices_sets[component[target_vertex]].insert(target_vertex);
+        }
+
+        // Also consider all individual vertices 
+        for (size_t i = 0; i < num_vertices(g); ++i) {
+            vertices_sets[component[i]].insert(i);
         }
 
         std::vector<std::vector<int>> vertices_in_components(num);
