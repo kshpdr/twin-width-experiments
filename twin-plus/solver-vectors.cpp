@@ -19,6 +19,7 @@ using namespace std;
 using namespace std::chrono;
 
 const int SCORE_RESET_THRESHOLD = 10000000;
+const int TIME_LIMIT = 20;  
 int cnt = 0;
 bool connectedComponents = true;
 
@@ -31,6 +32,50 @@ struct PairHash {
     }
 };
 
+struct ContractionStep {
+    int iteration;
+    pair<int, int> vertexPair;
+    int score;
+    int width;
+};
+
+struct ComponentSolution {
+    ostringstream stringSequence;
+    vector<ContractionStep> contractionSteps;
+    int width;
+
+    // Copy constructor
+    ComponentSolution(const ComponentSolution& other) {
+        width = other.width;
+
+        // Copy stringSequence
+        stringSequence.str(other.stringSequence.str());
+
+        // Copy contractionSteps
+        contractionSteps = other.contractionSteps;
+    }
+
+    // Default constructor
+    ComponentSolution() = default;
+
+    // Copy assignment operator
+    ComponentSolution& operator=(const ComponentSolution& other) {
+        if (this == &other) return *this; // Handle self assignment
+
+        width = other.width;
+
+        // Copy stringSequence
+        stringSequence.str("");
+        stringSequence << other.stringSequence.str();
+
+        // Copy contractionSteps
+        contractionSteps = other.contractionSteps;
+
+        return *this;
+    }
+};
+
+
 class Graph {
 private:
     vector<int> vertices;
@@ -40,11 +85,20 @@ private:
     vector<vector<int>> redDegreeToVertices; // vertex id saved
     vector<vector<int>> degreeToVertices;
     int width = 0;
+    std::mt19937 gen;
+    bool useFixedSeed = true;
 
 public:
-    Graph() {}
+    Graph() {
+        if(useFixedSeed) {
+            gen.seed(12345);
+        } else {
+            std::random_device rd;
+            gen.seed(rd());
+        }
+    }
 
-    Graph(const Graph &g) {
+    Graph(const Graph &g) : gen(12345) {
         this->vertices = g.vertices;
         this->ids = g.ids;
         this->adjListBlack = g.adjListBlack;
@@ -52,6 +106,13 @@ public:
         this->redDegreeToVertices = g.redDegreeToVertices;
         this->degreeToVertices = g.degreeToVertices;
         this->width = g.width;
+
+        if(useFixedSeed) {
+            gen.seed(12345);
+        } else {
+            std::random_device rd;
+            gen.seed(rd());
+        }
     }
 
     void updateDegrees(int v){
@@ -670,10 +731,7 @@ public:
     }
 
     int getRandomDistance() {
-        static std::random_device rd; 
-        static std::mt19937 gen(rd()); 
         std::uniform_int_distribution<> distrib(1, 2);
-
         return distrib(gen);
     }
 
@@ -682,10 +740,7 @@ public:
         allNeighbors.insert(allNeighbors.end(), adjListBlack[vertex].begin(), adjListBlack[vertex].end());
         allNeighbors.insert(allNeighbors.end(), adjListRed[vertex].begin(), adjListRed[vertex].end());
 
-        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-        std::default_random_engine engine(seed);
-
-        std::shuffle(allNeighbors.begin(), allNeighbors.end(), engine);
+        std::shuffle(allNeighbors.begin(), allNeighbors.end(), gen);
         return allNeighbors[0];
     }
 
@@ -702,6 +757,50 @@ public:
     }
 
 
+    ostringstream findTwins(bool trueTwins) {
+        ostringstream contractionSequence;        
+        
+        vector<vector<int>> partitions; 
+        vector<vector<int>> updated_partitions; 
+        partitions.push_back(vertices);
+
+        for (int v : vertices) {
+            vector<int> neighbors = adjListBlack[v];
+            if (trueTwins) neighbors.push_back(v);
+            sort(neighbors.begin(), neighbors.end());
+            for (vector partition : partitions) {
+                vector<int> difference;
+                std::set_difference(partition.begin(), partition.end(), neighbors.begin(), neighbors.end(), 
+                        std::inserter(difference, difference.end()));
+
+                vector<int> intersection;
+                std::set_intersection(partition.begin(), partition.end(), neighbors.begin(), neighbors.end(), 
+                        std::inserter(intersection, intersection.end()));
+
+                if (!difference.empty()) updated_partitions.push_back(difference);
+                if (!intersection.empty()) updated_partitions.push_back(intersection);
+            }
+            partitions = updated_partitions;
+            updated_partitions.clear();
+        }
+        for (const vector<int>& partition : partitions) {
+            if (partition.size() > 1) {
+                auto it = partition.begin();
+                int first = *it;
+                ++it;
+                while(it != partition.end()) {
+                    int next = *it;
+                    contractionSequence << first + 1 << " " << next + 1 << "\n";
+                    mergeVertices(first, next); 
+                    cout << "c Found twins";
+                    ++it;
+                }
+            }
+        }
+        return contractionSequence;
+    }
+
+
     ostringstream findRedDegreeContractionRandomWalk(){ 
         ostringstream contractionSequence;
         vector<vector<pair<int, int>>> scores(vertices.size());
@@ -711,14 +810,15 @@ public:
         while (vertices.size() > 1) {
             auto start = high_resolution_clock::now();
 
-            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(2);
+            // vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(log(vertices.size())))+1);
 
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
 
             for (int i = 0; i < lowestDegreeVertices.size(); i++) {
                 int v1 = lowestDegreeVertices[i];
-                set<int> randomWalkVertices = getRandomWalkVertices(v1, 10);  
+                set<int> randomWalkVertices = getRandomWalkVertices(v1, 105);  
               
                 for (int v2 : randomWalkVertices) {
                     if (v2 > v1) {
@@ -765,7 +865,87 @@ public:
         return contractionSequence;
     }
 
-    ostringstream findDegreeContraction(){ 
+    ComponentSolution findRedDegreeContractionRandomWalkExhaustively(const ComponentSolution& prevSolution = ComponentSolution()){ 
+        // ostringstream contractionSequence;
+        ComponentSolution solution;
+        vector<vector<pair<int, int>>> scores(vertices.size());
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestRedDegree(20);
+            // vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(log(vertices.size())))+1);
+
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                int v1 = lowestDegreeVertices[i];
+                set<int> randomWalkVertices = getRandomWalkVertices(v1, 10);  
+              
+                for (int v2 : randomWalkVertices) {
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = find_if(scores[v1].begin(), scores[v1].end(),
+                                    [v2](const pair<int, int>& p){ return p.first == v2; });
+                    int score;
+                    if (it != scores[v1].end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[v1].push_back({v2, score});
+                    }
+                    
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            solution.stringSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
+
+            mergeVertices(bestPair.first, bestPair.second);
+            solution.width = getWidth();
+
+            ContractionStep step;
+            step.iteration = iterationCounter;
+            step.vertexPair = bestPair;
+            step.score = bestScore;
+            step.width = getWidth();
+            solution.contractionSteps.push_back(step);
+
+            if (prevSolution.width != 0 && step.width > prevSolution.width) {
+                cout << "c Discarded" << endl;
+                return solution;
+            }
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+
+            // cout << getWidth() << endl;
+            iterationCounter++;
+
+            for(int i = 0; i < scores.size(); ++i) {
+                scores[i].clear();
+            }
+        }
+        // cout << "stop" << endl;
+        return solution;
+    }
+
+    ComponentSolution findDegreeContractionExhaustively(const ComponentSolution& prevSolution = ComponentSolution()){ 
+        ComponentSolution solution;
         ostringstream contractionSequence;
         vector<vector<pair<int, int>>> scores(vertices.size());
         auto heuristic_start_time = high_resolution_clock::now();
@@ -777,7 +957,85 @@ public:
             vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
             // vector<int> lowestDegreeVertices;
             // if (vertices.size() < 50) lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
-            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(ceil(log(vertices.size()))));            
+            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(3 * ceil(log(vertices.size()))));            
+            
+            int bestScore = INT_MAX;
+            pair<int, int> bestPair;
+
+            for (int i = 0; i < lowestDegreeVertices.size(); i++) {
+                for (int j = i+1; j < lowestDegreeVertices.size(); j++) {
+                    int v1 = lowestDegreeVertices[i];
+                    int v2 = lowestDegreeVertices[j];
+                    // if (!getTwoNeighborhood(v1).contains(v2)) continue;
+                    if (v2 > v1) {
+                        std::swap(v1, v2);
+                    }
+
+                    auto it = find_if(scores[v1].begin(), scores[v1].end(),
+                                    [v2](const pair<int, int>& p){ return p.first == v2; });
+                    int score;
+                    if (it != scores[v1].end()) {
+                        score = it->second;
+                    }
+                    else {
+                        score = getScore(v1, v2);
+                        scores[v1].push_back({v2, score});
+                    }
+                    
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPair = {v1, v2};
+                    }
+                }
+            }
+
+            solution.stringSequence << getVertexId(bestPair.first) + 1 << " " << getVertexId(bestPair.second) + 1 << "\n";
+
+            mergeVertices(bestPair.first, bestPair.second);
+            solution.width = getWidth();
+
+            ContractionStep step;
+            step.iteration = iterationCounter;
+            step.vertexPair = bestPair;
+            step.score = bestScore;
+            step.width = getWidth();
+            solution.contractionSteps.push_back(step);
+
+            if (prevSolution.width != 0 && step.width > prevSolution.width) {
+                cout << "c Discarded" << endl;
+                return solution;
+            }
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds>(stop - start);
+            int seconds_part = duration.count() / 1000;
+            int milliseconds_part = duration.count() % 1000;
+            std::cout << "c (Merged ( " << getVertexId(bestPair.first) << "," << getVertexId(bestPair.second) << "), left " << vertices.size() << ", tww: " << getWidth() << ") Cycle in " << seconds_part << "." 
+            << std::setfill('0') << std::setw(9) << milliseconds_part 
+            << " seconds" << std::endl;
+
+            for(int i = 0; i < scores.size(); ++i) {
+                scores[i].clear();
+            }
+            iterationCounter++;
+        }
+        return solution;
+    }
+
+    ostringstream findDegreeContraction(){ 
+        ostringstream contractionSequence;
+        vector<vector<pair<int, int>>> scores(vertices.size());
+        auto heuristic_start_time = high_resolution_clock::now();
+        
+        int iterationCounter = 0;
+        while (vertices.size() > 1) {
+            auto start = high_resolution_clock::now();
+
+            // vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
+            vector<int> lowestDegreeVertices = getTopNVerticesWithLowestDegree(50);
+            // vector<int> lowestDegreeVertices;
+            // if (vertices.size() < 50) lowestDegreeVertices = getTopNVerticesWithLowestDegree(20);
+            // else lowestDegreeVertices = getTopNVerticesWithLowestDegree(static_cast<int>(3 * ceil(log(vertices.size()))));            
             
             int bestScore = INT_MAX;
             pair<int, int> bestPair;
@@ -1272,6 +1530,7 @@ int main() {
     int numVertices, numEdges;
     set<pair<int, int>> readEdges;
     double density;
+    int maxTww = 0;
     bool constructComplement = false;
 
     auto start = high_resolution_clock::now(); 
@@ -1347,13 +1606,12 @@ int main() {
     cout << "c Time taken for connected components: " << duration.count() << " seconds" << std::endl;
 
     std::vector<int> remainingVertices;
-    int maxTww = 0;
     for (Graph& c : components) {
-        vector<int> partition1;
-        vector<int> partition2;
         ostringstream componentContraction;
+        // vector<int> partition1;
+        // vector<int> partition2;
 
-        // ostringstream twins = c.findTwins();
+        // ostringstream twins = c.findTwins(false);
         // cout << twins.str();
         // cout << c.applyOneDegreeRule().str();
 
@@ -1407,3 +1665,134 @@ int main() {
     cout << "c twin-width: " << maxTww << endl;
     return 0;    
 }
+
+
+// int main() {
+//     Graph g;
+//     string line;
+//     int numVertices, numEdges;
+//     set<pair<int, int>> readEdges;
+//     double density;
+//     int maxTww = 0;
+//     bool constructComplement = false;
+//     auto global_start = high_resolution_clock::now();
+
+//     auto start = high_resolution_clock::now(); 
+
+//     while (getline(cin, line)) {
+//         if (line[0] == 'c') {
+//             continue;
+//         }
+
+//         vector<string> tokens;
+//         string token;
+//         std::stringstream tokenStream(line);
+//         while (tokenStream >> token) {
+//             tokens.push_back(token);
+//         }
+
+//         if (tokens[0] == "p") {
+//             numVertices = stoi(tokens[2]);
+//             numEdges = stoi(tokens[3]);
+//             g.addVertices(numVertices);
+
+//             density = (2.0 * numEdges) / (numVertices * (numVertices - 1));
+//             if (density > 0.5) {
+//                 constructComplement = true;
+//             }
+//         } else if (constructComplement) {
+//             int u = stoi(tokens[0]);
+//             int v = stoi(tokens[1]);
+//             readEdges.insert({min(u-1, v-1), max(u-1, v-1)});
+//         } else {
+//             int u = stoi(tokens[0]);
+//             int v = stoi(tokens[1]);
+//             g.addEdgeBegin(u - 1, v - 1);
+//         }
+//     }
+
+//     if (constructComplement) {
+//         for (int i = 0; i < numVertices; i++) {
+//             for (int j = i + 1; j < numVertices; j++) {
+//                 if (readEdges.find({i, j}) == readEdges.end()) {
+//                     g.addEdgeBegin(i, j);
+//                 }
+//             }
+//         }
+//     }
+//     g.updateBlackDegrees();
+//     g.setIds(g.getVertices());
+
+//     auto stop = high_resolution_clock::now();
+//     auto duration = duration_cast<seconds>(stop - start);
+//     std::cout << "c Time taken too initialize the graph: " << duration.count() << " seconds" << std::endl;
+
+//     start = high_resolution_clock::now(); 
+    
+//     vector<Graph> components;
+//     if (connectedComponents) {
+//         components = g.findConnectedComponentsBoost();
+//     }
+//     else {
+//         components.push_back(g);
+//     }
+    
+//     stop = high_resolution_clock::now();
+//     duration = duration_cast<seconds>(stop - start);
+//     cout << "c Time taken for connected components: " << duration.count() << " seconds" << std::endl;
+
+//     vector<ComponentSolution> componentSolutions(components.size());
+//     vector<int> remainingVertices((components.size()));
+
+//     for (size_t i = 0; i < components.size(); ++i) {
+//         Graph componentCopy(components[i]);
+//         componentSolutions[i] = componentCopy.findRedDegreeContractionRandomWalkExhaustively();
+//         int remainingVertex = componentCopy.getVertexId(*componentCopy.getVertices().begin()) + 1;
+//         remainingVertices[i] = remainingVertex;
+//         maxTww = max(maxTww, componentSolutions[i].width);
+//     }
+
+//     while (true) { 
+//         auto curr_time = high_resolution_clock::now();
+//         auto elapsed_time = duration_cast<seconds>(curr_time - global_start);
+//         if (elapsed_time.count() >= TIME_LIMIT) {
+//             break; 
+//         }
+
+//         size_t worstIdx = 0;
+//         int worstWidth = componentSolutions[0].width;
+//         for (size_t i = 1; i < componentSolutions.size(); ++i) {
+//             if (componentSolutions[i].width > worstWidth) {
+//                 worstWidth = componentSolutions[i].width;
+//                 worstIdx = i;
+//             }
+//         }
+
+//         Graph worstComponentCopy(components[worstIdx]); 
+//         ComponentSolution tempSolution = worstComponentCopy.findRedDegreeContractionRandomWalkExhaustively(componentSolutions[worstIdx]);
+        
+//         if (worstComponentCopy.getVertices().size() != 1) continue;
+        
+//         if (tempSolution.width < componentSolutions[worstIdx].width) {
+//             componentSolutions[worstIdx] = tempSolution;
+//             int remainingVertex = worstComponentCopy.getVertexId(*worstComponentCopy.getVertices().begin()) + 1;
+//             remainingVertices[worstIdx] = remainingVertex;
+//             maxTww = componentSolutions[worstIdx].width;
+//         }
+//     }
+
+//     for (const auto& solution : componentSolutions) {
+//         cout << solution.stringSequence.str();
+//     }
+
+//     int primaryVertex = remainingVertices[0];
+//     for (size_t i = 1; i < remainingVertices.size(); ++i) {
+//         cout << primaryVertex << " " << remainingVertices[i] << endl;
+//     }
+
+//     auto final_stop = high_resolution_clock::now();
+//     auto final_duration = duration_cast<seconds>(final_stop - start);
+//     std::cout << "c In total: " << final_duration.count() << " seconds" << std::endl;
+//     cout << "c twin-width: " << maxTww << endl;
+//     return 0;    
+// }
